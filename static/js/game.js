@@ -8,6 +8,11 @@
 
 const STORAGE_KEY = 'kbc_net_v2';
 
+// Read question banks from the JSON script tags Hugo injected
+const EASY_QUESTIONS   = JSON.parse(document.getElementById('q-easy').textContent);
+const MEDIUM_QUESTIONS = JSON.parse(document.getElementById('q-medium').textContent);
+const HARD_QUESTIONS   = JSON.parse(document.getElementById('q-hard').textContent);
+
 // ─── State ────────────────────────────────────────────────────────────────────
 let state = {
   sessionQuestions: [],   // the 15 selected questions for this game

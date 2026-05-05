@@ -9,16 +9,18 @@
 </head>
 <body>
 
+  <!-- Data injected by Hugo — type="application/json" is skipped by minifiers -->
+  <script type="application/json" id="q-easy">{{ .Site.Data.easy | jsonify }}</script>
+  <script type="application/json" id="q-medium">{{ .Site.Data.medium | jsonify }}</script>
+  <script type="application/json" id="q-hard">{{ .Site.Data.hard | jsonify }}</script>
+
   <script>
-    const EASY_QUESTIONS   = JSON.parse({{ .Site.Data.easy   | jsonify }});
-    const MEDIUM_QUESTIONS = JSON.parse({{ .Site.Data.medium | jsonify }});
-    const HARD_QUESTIONS   = JSON.parse({{ .Site.Data.hard   | jsonify }});
     const PRIZES = [
       "₹1,000","₹2,000","₹3,000","₹5,000","₹10,000",
       "₹20,000","₹40,000","₹80,000","₹1,60,000","₹3,20,000",
       "₹6,40,000","₹12,50,000","₹25,00,000","₹50,00,000","₹1,00,00,000"
     ];
-    const SAFE_LEVELS = [4, 9]; // Q5 = ₹10K safe, Q10 = ₹3,20,000 safe
+    const SAFE_LEVELS = [4, 9];
   </script>
 
   <!-- ─── START SCREEN ─── -->
