@@ -1,0 +1,4 @@
+baseURL = "/"
+title = "KBC .NET Edition"
+languageCode = "en-in"
+disableKinds = ["taxonomy", "term", "RSS"]

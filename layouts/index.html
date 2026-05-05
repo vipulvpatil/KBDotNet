@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KBC .NET Edition — Senior Engineer Interview Prep</title>
+  <meta name="description" content="Kaun Banega Crorepati style quiz for Senior .NET Engineer interview preparation.">
+  <link rel="stylesheet" href="/css/kbc.css">
+</head>
+<body>
+
+  <script>
+    const EASY_QUESTIONS   = JSON.parse({{ .Site.Data.easy   | jsonify }});
+    const MEDIUM_QUESTIONS = JSON.parse({{ .Site.Data.medium | jsonify }});
+    const HARD_QUESTIONS   = JSON.parse({{ .Site.Data.hard   | jsonify }});
+    const PRIZES = [
+      "₹1,000","₹2,000","₹3,000","₹5,000","₹10,000",
+      "₹20,000","₹40,000","₹80,000","₹1,60,000","₹3,20,000",
+      "₹6,40,000","₹12,50,000","₹25,00,000","₹50,00,000","₹1,00,00,000"
+    ];
+    const SAFE_LEVELS = [4, 9]; // Q5 = ₹10K safe, Q10 = ₹3,20,000 safe
+  </script>
+
+  <!-- ─── START SCREEN ─── -->
+  <div id="start-screen" class="screen active">
+    <div class="start-card">
+      <div class="kbc-logo">
+        <span class="logo-kbc">KBC</span><span class="logo-net">.NET</span>
+      </div>
+      <p class="logo-show">Kaun Banega Crorepati</p>
+      <p class="logo-edition">Senior .NET Engineer Edition</p>
+      <p class="start-desc">
+        15 questions across Easy → Medium → Hard.<br>
+        3 lifelines. 2 safe havens. Win ₹1,00,00,000!
+      </p>
+      <div class="start-stats" id="start-stats"></div>
+      <button id="start-btn" class="btn-primary">Khelenge! 🎯</button>
+    </div>
+  </div>
+
+  <!-- ─── GAME SCREEN ─── -->
+  <div id="game-screen" class="screen">
+    <header class="game-header">
+      <div class="header-logo">KBC <span>.NET</span></div>
+      <div class="lifelines">
+        <button class="lifeline-btn" id="ll-5050" title="50:50 — Remove two wrong answers">
+          <div class="ll-top">50</div><div class="ll-sep">:</div><div class="ll-bot">50</div>
+        </button>
+        <button class="lifeline-btn" id="ll-phone" title="Phone a Friend — Get a hint">
+          <div class="ll-icon">📞</div>
+        </button>
+        <button class="lifeline-btn" id="ll-audience" title="Ask the Audience">
+          <div class="ll-icon">👥</div>
+        </button>
+      </div>
+      <div class="header-actions">
+        <button id="newgame-btn" class="btn-newgame" title="Start fresh with new questions">New Game</button>
+        <button id="walkaway-btn" class="btn-walkaway" title="Walk away with your safe winnings">Walk Away</button>
+      </div>
+    </header>
+
+    <div class="game-body">
+      <div class="question-area">
+        <div class="question-panel">
+          <div class="question-meta">
+            <span id="question-number">Question 1 of 15</span>
+            <span id="question-prize-tag">For ₹1,000</span>
+          </div>
+          <div class="question-text" id="question-text">Loading…</div>
+        </div>
+
+        <div class="options-grid" id="options-grid">
+          <button class="option-btn" id="opt-A" data-key="A">
+            <span class="opt-label">A</span>
+            <span class="opt-text" id="opt-A-text"></span>
+          </button>
+          <button class="option-btn" id="opt-B" data-key="B">
+            <span class="opt-label">B</span>
+            <span class="opt-text" id="opt-B-text"></span>
+          </button>
+          <button class="option-btn" id="opt-C" data-key="C">
+            <span class="opt-label">C</span>
+            <span class="opt-text" id="opt-C-text"></span>
+          </button>
+          <button class="option-btn" id="opt-D" data-key="D">
+            <span class="opt-label">D</span>
+            <span class="opt-text" id="opt-D-text"></span>
+          </button>
+        </div>
+      </div>
+
+      <aside class="prize-sidebar">
+        <div class="sidebar-title">Prize Ladder</div>
+        <ul id="prize-list"></ul>
+      </aside>
+    </div>
+
+    <footer class="game-footer">
+      <div class="footer-safe">🛡️ Safe: <strong id="safe-amount">₹0</strong></div>
+      <div class="footer-for">Playing for: <strong id="current-prize">₹1,000</strong></div>
+    </footer>
+  </div>
+
+  <!-- ─── MODALS ─── -->
+
+  <!-- Audience poll -->
+  <div id="audience-modal" class="modal hidden">
+    <div class="modal-box">
+      <div class="modal-title">📊 Ask the Audience</div>
+      <div class="poll-bars" id="poll-bars"></div>
+      <button class="btn-secondary" id="audience-close">Got it!</button>
+    </div>
+  </div>
+
+  <!-- Phone a Friend -->
+  <div id="phone-modal" class="modal hidden">
+    <div class="modal-box">
+      <div class="modal-title">📞 Phone a Friend</div>
+      <div class="phone-content">
+        <div class="friend-avatar">👨‍💻</div>
+        <p id="phone-text" class="phone-text"></p>
+      </div>
+      <button class="btn-secondary" id="phone-close">Thanks!</button>
+    </div>
+  </div>
+
+  <!-- Walk Away confirm -->
+  <div id="walkaway-modal" class="modal hidden">
+    <div class="modal-box">
+      <div class="modal-title">🚶 Walk Away?</div>
+      <p id="walkaway-text" class="walkaway-text"></p>
+      <div class="modal-actions">
+        <button class="btn-primary" id="walkaway-confirm">Yes, take the money!</button>
+        <button class="btn-secondary" id="walkaway-cancel">No, keep playing!</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- New Game confirm (shown mid-game) -->
+  <div id="newgame-modal" class="modal hidden">
+    <div class="modal-box">
+      <div class="modal-title">🔄 Start New Game?</div>
+      <p class="walkaway-text">You're on question <strong id="newgame-progress"></strong> and have earned <strong id="newgame-safe"></strong> in safe winnings.<br><br>Starting a new game will forfeit your current progress.</p>
+      <div class="modal-actions">
+        <button class="btn-primary" id="newgame-confirm">Yes, new questions!</button>
+        <button class="btn-secondary" id="newgame-cancel">Keep playing</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── GAME OVER SCREEN ─── -->
+  <div id="gameover-screen" class="screen">
+    <div class="result-card">
+      <div class="result-icon">💔</div>
+      <h1>Wrong Answer!</h1>
+      <p id="gameover-message" class="result-msg"></p>
+      <div class="correct-reveal" id="correct-reveal"></div>
+      <div class="explanation-box" id="explanation-box"></div>
+      <div class="final-winnings">You go home with <strong id="final-winnings">₹0</strong></div>
+      <button id="play-again-btn" class="btn-primary">New Game</button>
+    </div>
+  </div>
+
+  <!-- ─── WALK AWAY SCREEN ─── -->
+  <div id="walkaway-screen" class="screen">
+    <div class="result-card">
+      <div class="result-icon">🚶</div>
+      <h1>You Walked Away!</h1>
+      <p class="result-msg">A wise decision — live to fight another day.</p>
+      <div class="final-winnings">You take home <strong id="walkaway-winnings">₹0</strong></div>
+      <button id="play-again-walkaway-btn" class="btn-primary">New Game</button>
+    </div>
+  </div>
+
+  <!-- ─── WINNER SCREEN ─── -->
+  <div id="winner-screen" class="screen">
+    <div class="result-card winner-card">
+      <div id="confetti-container"></div>
+      <div class="result-icon winner-trophy">🏆</div>
+      <h1 class="winner-title">CROREPATI!</h1>
+      <p class="result-msg">Extraordinary! You've mastered .NET Senior Engineering.</p>
+      <div class="final-winnings winner-winnings">You won <strong>₹1,00,00,000!</strong></div>
+      <button id="play-again-winner-btn" class="btn-primary">Play Again</button>
+    </div>
+  </div>
+
+  <script src="/js/game.js"></script>
+</body>
+</html>
