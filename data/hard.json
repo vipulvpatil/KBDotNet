@@ -1,62 +1,782 @@
 [
-  {"id":"h001","question":"What is the most common cause of a memory leak in .NET despite garbage collection?","options":{"A":"Not calling Dispose() on every object, even those without unmanaged resources","B":"Event handler subscriptions where the publisher outlives the subscriber, preventing GC of the subscriber","C":"Using too many static variables","D":"Creating objects inside loops"},"correct":"B","hint":"If object A subscribes to an event on long-lived object B, B holds a reference to A — A can never be collected.","explanation":"Event subscriptions create a reference from publisher to subscriber via the delegate. If the publisher (e.g., a singleton or static event) outlives the subscriber, the subscriber is GC-rooted and never collected. Solution: unsubscribe in Dispose() or use WeakReference-based event patterns."},
-  {"id":"h002","question":"What does the 'ref struct' modifier enforce in C#?","options":{"A":"The struct is immutable (read-only)","B":"The struct may contain managed reference type fields","C":"The struct is stack-allocated only — it cannot be boxed, stored on the heap, captured in lambdas, or used as a generic type argument","D":"The struct is reference-counted like COM objects"},"correct":"C","hint":"Span<T> is the canonical example — this constraint is what makes its zero-allocation guarantee possible.","explanation":"ref struct types can only live on the stack. They cannot be boxed, stored in fields of non-ref-struct types, assigned to interface variables, used as generic type arguments (without 'allows ref struct' in C# 13), or captured by lambdas. This enables Span<T> and ReadOnlySpan<T> to safely wrap stack memory."},
-  {"id":"h003","question":"What is the primary purpose of Span<T> in .NET?","options":{"A":"A resizable array allocated on the heap","B":"A thread-safe view over a sequence for concurrent access","C":"A lazily evaluated sequence of elements","D":"A type-safe, allocation-free view over a contiguous memory region — stack, heap, or unmanaged memory"},"correct":"D","hint":"It's a ref struct so it lives only on the stack — ideal for zero-copy string slicing and buffer manipulation.","explanation":"Span<T> wraps a contiguous memory region (array slice, stackalloc buffer, unmanaged memory) without allocating. It enables zero-copy slicing: ReadOnlySpan<char> lets you process substrings without string allocation. Because it's a ref struct, it can't escape to the heap, making it safe for stack memory references."},
-  {"id":"h004","question":"In .NET's generational GC, why is Gen 0 collected so frequently?","options":{"A":"Gen 0 stores static data which changes most often","B":"Gen 0 collection is free — it only exists during Server GC mode","C":"Gen 0 is tiny and most objects die young (generational hypothesis), making Gen 0 collections fast and frequent","D":"Generational GC is only active in 64-bit runtimes"},"correct":"C","hint":"Most allocations are short-lived — a button press, a request, a loop iteration. The GC exploits this.","explanation":"The generational hypothesis: most objects die young. Gen 0 is small (a few hundred KB), collected frequently (sub-millisecond), and captures most dead objects cheaply. Survivors promote to Gen 1, then Gen 2. Gen 2 collections are expensive — a full GC. This design makes allocation nearly free and average GC cost low."},
-  {"id":"h005","question":"Which .NET GC mode creates one managed heap per logical CPU core, designed for server throughput?","options":{"A":"Workstation GC","B":"Background GC","C":"Concurrent GC","D":"Server GC"},"correct":"D","hint":"Enabled automatically in ASP.NET Core on multi-core machines — trades memory for lower pause times under load.","explanation":"Server GC maintains one heap per logical CPU, enabling parallel GC on all cores simultaneously. It increases throughput and lowers pause frequency under load, at the cost of higher baseline memory. ASP.NET Core enables it automatically. Configure via DOTNET_GCConserveMemory or runtimeconfig for fine-tuning."},
-  {"id":"h006","question":"What is the Pinned Object Heap (POH) introduced in .NET 5?","options":{"A":"A heap segment for objects pinned with GC.Collect(2)","B":"A dedicated heap for pinned objects that prevents GC fragmentation of the regular heaps","C":"A read-only segment of the heap for immutable strings","D":"A heap used exclusively by unsafe code blocks"},"correct":"B","hint":"Before POH, pinning objects inside the regular heap caused fragmentation — now they're isolated.","explanation":"Pinned objects (fixed statements, GCHandle.Alloc with Pinned) previously fragmented the regular heaps because the GC couldn't move them during compaction. POH is a dedicated, non-compacted heap for pinned objects, preventing them from fragmenting Gen 0/1/2. This improves GC efficiency for I/O-heavy code that pins byte buffers."},
-  {"id":"h007","question":"What is TaskCompletionSource<T> and when do you need it?","options":{"A":"A factory for creating pre-completed Tasks","B":"A way to bridge event-based or callback-based async APIs into the Task-based async model","C":"A base class for implementing custom awaitables","D":"A performance-optimised version of Task.Run for CPU-bound work"},"correct":"B","hint":"Wrapping an old-style callback API or signalling a Task from external code — that's what this is for.","explanation":"TaskCompletionSource<T> lets you manually control a Task's completion. You call tcs.SetResult(value), tcs.SetException(ex), or tcs.SetCanceled() from anywhere to complete the Task. It's essential for bridging legacy callback/event APIs into async/await, or for implementing custom async primitives like async locks."},
-  {"id":"h008","question":"What is the async state machine generated by the C# compiler for async/await?","options":{"A":"A background thread that executes the async method","B":"A struct implementing IAsyncStateMachine that breaks the method into states at each await point, resuming from the correct state on continuation","C":"A heap-allocated object that caches the Task result","D":"A proxy class that wraps synchronous methods to make them appear asynchronous"},"correct":"B","hint":"The compiler transforms your async method into a state machine struct — each await becomes a state transition.","explanation":"The C# compiler rewrites every async method into a struct (IAsyncStateMachine) with a MoveNext() method. Each await point is a state. When the awaited Task completes, MoveNext() is called with the next state number. The state machine captures local variables as fields. This is why async methods have overhead — the state machine may be heap-allocated if the method doesn't complete synchronously."},
-  {"id":"h009","question":"What is JIT tiered compilation in .NET and what does it enable?","options":{"A":"Compiling code in multiple CPU threads simultaneously","B":"Compiling methods at a lower optimization tier first for fast startup, then recompiling hot methods at full optimization","C":"A mode where methods are compiled ahead-of-time in release builds","D":"Splitting a method's compilation between JIT and AOT phases"},"correct":"B","hint":"Tier 0 gets you running fast. Tier 1 re-JITs the hot paths with full optimization after profiling.","explanation":"Tiered compilation (default since .NET Core 3) initially JIT-compiles methods quickly at Tier 0 (minimal optimization) for fast startup. Methods called frequently are recompiled at Tier 1 with full optimization (inlining, devirtualization, SIMD). This balances startup speed with peak throughput. On-stack replacement (OSR) in .NET 7+ allows upgrading hot loop iterations."},
-  {"id":"h010","question":"What is Interlocked.CompareExchange and what pattern does it enable?","options":{"A":"A thread-safe swap of two variables","B":"A lock-free compare-and-swap (CAS) operation: sets a variable to a new value only if it currently holds an expected value, returning the original","C":"A monitor that compares two thread priorities before granting access","D":"A method that exchanges data between two concurrent collections"},"correct":"B","hint":"CAS is the foundation of lock-free programming — the basis for optimistic concurrency in data structures.","explanation":"Interlocked.CompareExchange(ref location, newValue, comparand) atomically checks if location == comparand; if so, it sets location = newValue. Returns the original value. This enables lock-free algorithms: implement a spin loop trying CAS until it succeeds. Used in lazy initialisation patterns, reference counting, and lock-free queues."},
-  {"id":"h011","question":"What is System.Threading.Channels and when should you use it over BlockingCollection<T>?","options":{"A":"Channels are for inter-process communication; BlockingCollection is in-process only","B":"Channels provide a high-performance, async-native producer-consumer pipe with backpressure support; BlockingCollection is synchronous and blocks threads","C":"They are equivalent — Channels is just a newer API name for BlockingCollection","D":"Channels are only available in .NET 6+; use BlockingCollection for older runtimes"},"correct":"B","hint":"BlockingCollection.Take() blocks a thread. Channel.Reader.ReadAsync() is async and frees the thread while waiting.","explanation":"Channel<T> (System.Threading.Channels) is an async-native, high-performance producer-consumer pipe. Reader.ReadAsync()/WaitToReadAsync() don't block threads. It supports bounded channels (backpressure), unbounded channels, and multiple producers/consumers. BlockingCollection blocks the calling thread, wasting threads under load. Channels integrate naturally with async/await."},
-  {"id":"h012","question":"What is ReaderWriterLockSlim and when is it more appropriate than 'lock'?","options":{"A":"A lighter-weight lock that uses less memory than Monitor","B":"A lock allowing multiple concurrent readers but exclusive access for writers — optimal for read-heavy, write-rare scenarios","C":"An async-compatible lock replacing SemaphoreSlim for read operations","D":"A lock that spans multiple AppDomains for cross-process synchronization"},"correct":"B","hint":"If 95% of accesses are reads and 5% are writes, 'lock' serializes all readers unnecessarily.","explanation":"ReaderWriterLockSlim allows any number of threads to hold the read lock concurrently. A write lock is exclusive — it waits for all readers to finish. Ideal for in-memory caches, configuration objects, or dictionaries that are read frequently but written rarely. Compared to 'lock', it dramatically increases read throughput in read-heavy scenarios."},
-  {"id":"h013","question":"What is the Transactional Outbox pattern?","options":{"A":"A retry policy for transient database failures","B":"Persisting the event as a row in the same DB transaction as the business data, then a separate relay process publishes it to the broker — ensuring atomic dual-write without 2PC","C":"A pattern for batching multiple database writes into a single transaction","D":"An audit log pattern that records all outbound messages"},"correct":"B","hint":"The message never leaves the database boundary until committed — the relay handles the rest reliably.","explanation":"The Outbox pattern solves the dual-write problem: write business data AND an event atomically to the same database transaction. A background relay (polling or CDC via Debezium) reads committed outbox rows and publishes them to a message broker, then marks them sent. This guarantees at-least-once delivery without distributed transactions."},
-  {"id":"h014","question":"What is the key architectural trade-off between Saga choreography and Saga orchestration?","options":{"A":"Orchestration always outperforms choreography due to fewer network hops","B":"Choreography requires a message broker; orchestration works without one","C":"Choreography decentralises logic via events (loose coupling, hard to trace); orchestration centralises logic in a coordinator (easy to trace, creates coupling)","D":"They are the same pattern with different naming conventions"},"correct":"C","hint":"One has services reacting independently to events; the other has a central director explicitly commanding each step.","explanation":"Choreography: services emit domain events and react to each other's events — no central authority, highly decoupled, but the overall flow is implicit and hard to trace. Orchestration: a saga orchestrator explicitly calls each service in sequence — the flow is visible in one place but creates a coupling point and potential single point of failure."},
-  {"id":"h015","question":"What is the CAP theorem and how does it affect .NET distributed system design?","options":{"A":"A theorem stating that distributed systems must prioritize Consistency, Availability, and Performance","B":"In a network partition, a distributed system can guarantee either Consistency (all nodes see same data) or Availability (always respond), but not both simultaneously","C":"A guideline that all APIs must have consistent, available, and persistent responses","D":"A theorem applicable only to NoSQL databases, not to .NET services using SQL Server"},"correct":"B","hint":"During a network split, you must choose: do you return potentially stale data (AP) or refuse to respond until consistent (CP)?","explanation":"CAP theorem: a distributed system during a network Partition must choose between Consistency (returning up-to-date or error) or Availability (always returning a response, possibly stale). Most systems choose AP (eventual consistency) for higher availability. Understanding this drives design decisions: use optimistic locking, idempotent operations, and eventual consistency patterns."},
-  {"id":"h016","question":"What is idempotency and why is it critical in distributed .NET systems?","options":{"A":"The ability of a service to process requests in parallel without conflicts","B":"An operation that produces the same result whether executed once or many times — essential for safe retries","C":"A caching strategy that prevents duplicate database reads","D":"The property of a message broker that guarantees message ordering"},"correct":"B","hint":"Network retries are unavoidable — if placing an order twice is safe, you have idempotency. If it charges twice, you don't.","explanation":"Idempotency means re-executing the same operation yields the same result. In distributed systems, retries (due to timeouts, network errors) can re-deliver messages. Operations must be designed to handle this: use idempotency keys (unique request IDs), check if the operation was already performed, and skip duplicates rather than re-executing."},
-  {"id":"h017","question":"What is Event Sourcing?","options":{"A":"A logging strategy that records all application exceptions as events","B":"A persistence pattern where state is derived by replaying an ordered, immutable log of domain events rather than storing current state","C":"A messaging pattern where events trigger microservice callbacks","D":"An ASP.NET Core feature for real-time event streaming to browsers"},"correct":"B","hint":"Instead of 'balance = 1000', you store 'Deposited 500, Withdrew 200, Deposited 700' — replay gives you 1000.","explanation":"Event Sourcing stores every state change as an immutable domain event in an append-only event store. Current state is computed by replaying events. Benefits: full audit trail, temporal queries (state at any point in time), event replay for projections. Challenges: eventual consistency in read models, snapshot strategies for performance, event schema evolution."},
-  {"id":"h018","question":"What is a distributed lock (e.g., Redlock) and when do you need one in .NET?","options":{"A":"A C# lock{} statement that works across multiple AppDomains","B":"A mechanism for acquiring mutual exclusion across multiple process/server instances — preventing concurrent execution of a critical section in a distributed system","C":"A database row lock used by EF Core for pessimistic concurrency","D":"A lock built into ASP.NET Core's session middleware"},"correct":"B","hint":"A single-process lock{} doesn't help when 3 instances of your service run in Kubernetes.","explanation":"When multiple service instances run concurrently, in-process locks don't span processes. Distributed locks (e.g., Redis SETNX with TTL, Redlock algorithm) coordinate across instances. Use cases: scheduled job deduplication, inventory reservation. Challenges: lock expiry (TTL must exceed worst-case operation time), fencing tokens to prevent acting on an expired lock."},
-  {"id":"h019","question":"What is Change Data Capture (CDC) and how does it relate to the Outbox pattern?","options":{"A":"A .NET technique for detecting property changes in domain models","B":"A database feature that captures row-level changes from the transaction log — enabling the Outbox relay to detect new messages without polling","C":"A caching strategy that invalidates cache entries when underlying data changes","D":"An EF Core interceptor that captures change tracker modifications"},"correct":"B","hint":"Debezium reads SQL Server/PostgreSQL transaction logs and pushes changes to Kafka — no polling, low latency.","explanation":"CDC reads the database transaction log (WAL in PostgreSQL, SQL Server CDC) to capture every insert/update/delete in real time. In the Outbox pattern, a CDC connector (e.g., Debezium) detects new outbox rows and publishes them to a message broker without polling loops, providing lower latency and less DB load than polling."},
-  {"id":"h020","question":"What is the Thundering Herd problem in distributed .NET caching?","options":{"A":"High memory usage from caching too many large objects","B":"Cache poisoning from untrusted input data","C":"Multiple requests simultaneously missing (or invalidating) the same cache entry and all independently querying the underlying store","D":"Slow deserialization of cache entries causing request queuing"},"correct":"C","hint":"Popular item expires at midnight. All 500 concurrent requests miss and all hit the database simultaneously — 500 queries instead of 1.","explanation":"When a popular cache entry expires, all concurrent requests miss simultaneously and stampede the database. Solutions: mutex/semaphore around cache population (only one request rebuilds, others wait), probabilistic early expiration, background refresh before expiry, or staggered TTLs. SemaphoreSlim(1,1) is the idiomatic .NET approach."},
-  {"id":"h021","question":"What is eventual consistency and how do you design a .NET service around it?","options":{"A":"A guarantee that all writes succeed within an eventual timeout","B":"A consistency model where replicas may diverge temporarily but converge to the same state after all updates propagate","C":"A database isolation level that allows dirty reads for performance","D":"An EF Core configuration that defers constraint checking to end of transaction"},"correct":"B","hint":"After a write, reads from replicas may temporarily return stale data — this is by design in AP systems.","explanation":"Eventual consistency means: given no new updates, all replicas will eventually agree. For .NET services: make operations idempotent (safe to retry), use optimistic concurrency (CAS, RowVersion), avoid relying on read-your-own-write from different replicas, propagate changes via events/CDC, and design read models to tolerate slight staleness."},
-  {"id":"h022","question":"What is the backpressure problem in stream processing and how does Channel<T> address it?","options":{"A":"The performance cost of serializing objects for message queues","B":"When producers generate data faster than consumers can process it — bounded channels block/drop producers to prevent memory exhaustion","C":"Network latency between producer and consumer microservices","D":"CPU pressure from deserializing high-throughput event streams"},"correct":"B","hint":"An unbounded buffer grows forever if the consumer is slower — bounded channels enforce limits.","explanation":"Without backpressure, a fast producer overwhelms a slow consumer, exhausting memory. Channel.CreateBounded<T>(capacity) creates a bounded channel — when full, the producer's WriteAsync() waits (or drops, depending on BoundedChannelFullMode). This propagates pressure upstream, giving consumers time to catch up rather than buffering infinitely."},
-  {"id":"h023","question":"What is the Bulkhead pattern in resilient .NET microservices?","options":{"A":"A database pattern for partitioning tables to improve query performance","B":"Isolating resources (thread pools, connection pools, semaphores) for different dependencies so a failure in one doesn't exhaust resources for others","C":"A circuit breaker variant that uses memory limits instead of failure counts","D":"A load balancing strategy that routes requests based on server memory usage"},"correct":"B","hint":"Like ship bulkheads — a breach in one compartment doesn't sink the whole ship.","explanation":"The Bulkhead pattern allocates separate resource pools (e.g., separate SemaphoreSlim or thread pools) per dependency. If calls to ServiceA are slow and consume all threads, calls to ServiceB still have their own thread pool and remain responsive. Polly's BulkheadPolicy implements this. Prevents a single slow dependency from degrading the entire application."},
-  {"id":"h024","question":"What is Domain-Driven Design (DDD) and what is an Aggregate Root?","options":{"A":"A database design methodology grouping related tables","B":"DDD models complex business domains through rich domain objects; an Aggregate Root is the entry point to a cluster of related entities that must maintain invariants together","C":"A CQRS pattern where domain events drive aggregated read models","D":"A design pattern where all business logic lives in the database stored procedures"},"correct":"B","hint":"Order is the aggregate root — you can only access OrderLines through the Order, never directly. This enforces invariants.","explanation":"In DDD, an Aggregate is a cluster of domain objects (entities and value objects) treated as a unit for data changes. The Aggregate Root is the only entry point — all external references point to the root, never to internal entities. This ensures business invariants (e.g., total order value constraints) are always enforced atomically."},
-  {"id":"h025","question":"What is Clean Architecture's Dependency Rule?","options":{"A":"All dependencies should be configured at startup in Program.cs","B":"Source code dependencies must point only inward — inner layers (domain, application) must not depend on outer layers (infrastructure, UI)","C":"Each layer should have exactly one dependency on the layer above it","D":"Dependencies should be minimized by using static methods instead of injected services"},"correct":"B","hint":"Domain layer knows nothing about EF Core, HTTP, or SQL — infrastructure depends on domain, never the other way.","explanation":"Clean Architecture (Uncle Bob) defines concentric circles: Entities (innermost), Use Cases, Interface Adapters, Frameworks/Infrastructure. The Dependency Rule: dependencies only point inward. Domain/application code has no knowledge of databases, UI, or frameworks. Infrastructure (EF Core, HTTP) implements interfaces defined in inner layers."},
-  {"id":"h026","question":"What is the difference between Memory<T> and Span<T>?","options":{"A":"Memory<T> is read-only; Span<T> supports writes","B":"Memory<T> can be stored on the heap, passed across async calls, and stored in fields; Span<T> is a ref struct limited to the stack","C":"They are identical — Memory<T> is just the async version of Span<T>","D":"Span<T> works with unmanaged memory; Memory<T> only with managed arrays"},"correct":"B","hint":"Span<T> can't survive an await (stack only). Memory<T> can — it's the heap-compatible counterpart.","explanation":"Span<T> is a ref struct — stack-only, cannot be stored in heap fields or survive await points. Memory<T> is a struct (not ref struct) that can be stored on the heap, passed across async method boundaries, and held in class fields. memory.Span gives you a Span<T> view when you're in a sync context. Use Memory<T> for async, Span<T> for sync performance-critical code."},
-  {"id":"h027","question":"What is stackalloc in C# and when should you use it?","options":{"A":"A keyword that allocates a struct on the heap for pinned memory access","B":"Allocates a block of memory on the stack — zero GC pressure, but limited size and scope","C":"A compiler hint that suggests the JIT stack-allocate an object","D":"An unsafe allocation method for COM interop buffers"},"correct":"B","hint":"Span<byte> buffer = stackalloc byte[256] — perfect for small, short-lived buffers without heap allocation.","explanation":"stackalloc allocates memory on the stack. Combined with Span<T>: 'Span<byte> buf = stackalloc byte[256]' gives a zero-allocation buffer. Use for small, bounded, short-lived buffers (parsing, crypto operations). Never use for large or unbounded sizes — stack overflow. The memory is automatically freed when the method returns."},
-  {"id":"h028","question":"What are global query filters in EF Core and what are they used for?","options":{"A":"Filters applied globally to all EF Core queries in all DbContexts","B":"Predicates added to an entity's query in OnModelCreating, automatically applied to every query for that entity type — used for soft delete and multi-tenancy","C":"A caching layer that filters duplicate query results","D":"SQL views automatically generated by EF Core from LINQ expressions"},"correct":"B","hint":"modelBuilder.Entity<Post>().HasQueryFilter(p => !p.IsDeleted) — every query on Post automatically excludes deleted records.","explanation":"Global query filters (modelBuilder.Entity<T>().HasQueryFilter(predicate)) are automatically added to every LINQ query for that entity. Common uses: soft delete (IsDeleted = false), multi-tenancy (TenantId = currentTenantId). Override per-query with .IgnoreQueryFilters() when needed."},
-  {"id":"h029","question":"What is an EF Core interceptor and what can you do with it?","options":{"A":"A middleware that intercepts EF Core exceptions before they reach the application","B":"A hook into EF Core's internals that intercepts and optionally modifies database commands, connections, and save operations","C":"A DI decorator that wraps DbContext for logging","D":"A Roslyn analyzer that validates EF Core model configurations at compile time"},"correct":"B","hint":"Intercept every SQL command, add query hints, log slow queries, or inject tenant IDs at the database level.","explanation":"EF Core interceptors (IDbCommandInterceptor, ISaveChangesInterceptor, IDbConnectionInterceptor) intercept operations before/after execution. Uses: query logging, adding SQL hints, auditing (auto-set CreatedAt/UpdatedAt in SaveChanges), soft delete, multi-tenancy injection. Registered via optionsBuilder.AddInterceptors()."},
-  {"id":"h030","question":"What are the four gRPC communication patterns?","options":{"A":"REST, GraphQL, WebSocket, and Polling","B":"Unary (request/response), Server streaming, Client streaming, and Bidirectional streaming","C":"Synchronous, Asynchronous, Batch, and Event-driven","D":"JSON, Protobuf, MessagePack, and XML"},"correct":"B","hint":"Think of streaming as one side or both sides sending a stream of messages rather than a single request/response.","explanation":"gRPC supports: Unary (one request, one response — like HTTP); Server streaming (one request, stream of responses — e.g., live updates); Client streaming (stream of requests, one response — e.g., file upload); Bidirectional streaming (both sides stream simultaneously — e.g., chat). All defined in .proto files and strongly typed."},
-  {"id":"h031","question":"What is OpenTelemetry in .NET and what does it unify?","options":{"A":"A NuGet package that replaces ILogger in ASP.NET Core","B":"A vendor-neutral observability framework that unifies distributed traces, metrics, and logs under a single SDK and export pipeline","C":"A performance benchmarking tool for .NET microservices","D":"A standardised health check endpoint for Kubernetes probes"},"correct":"B","hint":"One SDK, pluggable exporters — send traces to Jaeger, metrics to Prometheus, logs anywhere, without changing application code.","explanation":"OpenTelemetry (.NET SDK: OpenTelemetry.Extensions.Hosting) instruments applications for traces (ActivitySource), metrics (Meter), and logs (via ILogger integration). Data is exported via OTLP to backends (Jaeger, Zipkin, Prometheus, Grafana Tempo, Azure Monitor). It eliminates vendor lock-in for observability."},
-  {"id":"h032","question":"What is distributed tracing and what problem does it solve?","options":{"A":"Tracing the execution order of async continuations on a single machine","B":"Tracking a request's journey across multiple services using correlated trace IDs and spans, enabling end-to-end latency analysis","C":"A debugging technique using breakpoints in distributed unit tests","D":"Logging all database queries across a microservices fleet"},"correct":"B","hint":"TraceId follows a request from API gateway → order service → inventory service → payment service. Where did the 3s latency come from?","explanation":"Distributed tracing propagates a TraceId through service boundaries (via HTTP headers like traceparent/W3C Trace Context). Each service creates child Spans (Activity in .NET) recording timing and metadata. Tools like Jaeger or Zipkin visualise the full trace as a waterfall, pinpointing latency hot spots across services."},
-  {"id":"h033","question":"What is the WeakReference<T> class and when should you use it?","options":{"A":"A reference that allows the GC to collect the target object when no strong references remain — used for caches where objects should be freed under memory pressure","B":"A thread-safe reference for concurrent access patterns","C":"A COM interop reference type for unmanaged memory","D":"A nullable wrapper that automatically assigns null when the target is disposed"},"correct":"A","hint":"WeakReference lets you say 'keep this if you can, but GC it if you need memory' — perfect for in-process caches.","explanation":"WeakReference<T> holds a reference that doesn't prevent GC collection. When memory is needed, the GC collects the target. TryGetTarget(out T value) returns false if it was collected. Use for caches where objects are expensive to compute but can be regenerated — the cache helps performance but isn't required for correctness. Common pattern: ConditionalWeakTable<TKey, TValue>."},
-  {"id":"h034","question":"What is the async/await overhead and how do you minimize it in hot paths?","options":{"A":"async/await always allocates a Task object — there is no way to avoid it","B":"The state machine may heap-allocate on first call; use ValueTask, avoid async for synchronous hot paths, and minimise captured closures","C":"Overhead is fixed at 50ns per await — acceptable for all use cases","D":"Use Task.Run() instead of async/await for better performance"},"correct":"B","hint":"If your method almost always completes synchronously (cache hit), ValueTask<T> avoids the Task allocation entirely.","explanation":"async methods generate a state machine struct. If the method completes synchronously (no actual suspension), the struct may be stack-allocated. If it suspends, the state machine is heap-allocated and promoted. Use ValueTask<T> for methods with frequent synchronous completions (cache scenarios). Avoid unnecessary async wrappers. Profile with BenchmarkDotNet before optimising."},
-  {"id":"h035","question":"What is IAsyncDisposable and when do you implement it?","options":{"A":"An interface for classes that need async finalizers called by the GC","B":"Allows async cleanup in Dispose — use it when releasing resources requires asynchronous operations (e.g., flushing async streams, closing async connections)","C":"An interface that makes Dispose() callable with await","D":"A replacement for IDisposable in ASP.NET Core middleware"},"correct":"B","hint":"await using var conn = new AsyncDbConnection() — DisposeAsync() is called when the block exits.","explanation":"IAsyncDisposable defines ValueTask DisposeAsync(). Use it when cleanup is inherently async: flushing an async writer, closing a WebSocket, or draining a channel. 'await using var x = ...' calls DisposeAsync() on scope exit. A class can implement both IDisposable and IAsyncDisposable — the latter is preferred in async contexts."},
-  {"id":"h036","question":"What is table-per-hierarchy (TPH) vs table-per-type (TPT) mapping in EF Core?","options":{"A":"TPH stores each entity in its own table; TPT stores all entities in one shared table","B":"TPH maps an inheritance hierarchy to a single table with a discriminator column; TPT maps each type to its own table with JOINs for base properties","C":"They produce identical database schemas — only query syntax differs","D":"TPT is EF Core 7+ only; TPH is available since EF Core 1"},"correct":"B","hint":"TPH: one table, nullable columns per subtype. TPT: one table per type, joined on primary key. TPH is generally faster.","explanation":"TPH (default): all types in the hierarchy share one table. A 'Discriminator' column identifies the type. Columns for subtype-specific properties are nullable. TPT: each type has its own table; querying a subtype requires a JOIN with the base table. TPH is faster (no joins) but has nullable columns; TPT is more normalized but slower due to joins."},
-  {"id":"h037","question":"What is the Ports and Adapters (Hexagonal) Architecture?","options":{"A":"A network architecture pattern for microservices using specific TCP ports","B":"An architectural pattern where the application core (domain logic) is surrounded by ports (interfaces) that adapters (implementations) plug into — isolating the domain from infrastructure","C":"A design where each service exposes exactly 6 endpoints (hexagonal)","D":"A pattern for routing requests through API gateway adapters to backend ports"},"correct":"B","hint":"The domain defines IEmailSender (port). The SMTP adapter implements it. The domain never knows about SMTP.","explanation":"Hexagonal Architecture (Alistair Cockburn): the application core defines ports (interfaces) for everything it needs from the outside (persistence, messaging, email, HTTP). Adapters implement these ports (EF Core DbAdapter, SmtpEmailAdapter). This makes the core independently testable and swappable — replace the SQL adapter with an in-memory adapter for tests."},
-  {"id":"h038","question":"What is PKCE (Proof Key for Code Exchange) in OAuth2 and why does ASP.NET Core use it?","options":{"A":"A password hashing scheme used instead of PBKDF2 in ASP.NET Core Identity","B":"An extension to the OAuth2 authorization code flow that prevents authorization code interception attacks, required for public clients (SPAs, mobile apps)","C":"A JWT signature algorithm stronger than RS256","D":"A CORS policy for OAuth2 endpoints"},"correct":"B","hint":"Without PKCE, a malicious app could intercept the authorization code and exchange it for tokens. PKCE binds the code to the original requester.","explanation":"PKCE prevents authorization code interception attacks. The client generates a code_verifier (random secret), sends its hash (code_challenge) in the auth request, and the original verifier when exchanging the code for tokens. The auth server verifies the pair. Required for public clients (browser SPAs, mobile) that can't keep a client_secret."},
-  {"id":"h039","question":"What is the Data Protection API in ASP.NET Core?","options":{"A":"An API for encrypting database connection strings in appsettings.json","B":"A cryptographic API for protecting (encrypting+authenticating) data with automatic key management and key rotation","C":"A middleware that adds HTTPS enforcement and HSTS headers","D":"An attribute system for marking sensitive model properties"},"correct":"B","hint":"Used for anti-forgery tokens, cookie authentication, and TempData — and you can use it in your own code too.","explanation":"ASP.NET Core's Data Protection (IDataProtector) provides authenticated encryption (AES-CBC + HMACSHA256 by default) with automatic key generation, key storage, and key rotation. Keys can be stored in the file system, Azure Key Vault, or Redis. ASP.NET Core uses it internally for cookies, antiforgery tokens, and session."},
-  {"id":"h040","question":"What is structured logging and why is it superior to string concatenation logging?","options":{"A":"Logging that uses XML formatting for better IDE support","B":"Logging that captures semantic properties (key-value pairs) alongside the message, enabling filtering, querying, and correlation in log aggregation systems","C":"A logging strategy that enforces a fixed log message format across all services","D":"Logging that structures the call stack for better exception reporting"},"correct":"B","hint":"logger.LogInformation(\"Order {OrderId} placed by {UserId}\", orderId, userId) — Seq/Elastic can filter by OrderId.","explanation":"Structured logging preserves properties as searchable fields, not just concatenated strings. ILogger's message template (\"Order {OrderId}\") extracts named properties. Log sinks (Serilog to Seq, Elastic) store them as JSON. You can then query: 'all errors where OrderId = 42'. String concatenation loses structure — you'd need regex to extract data."},
-  {"id":"h041","question":"What is the 'volatile' keyword in C# and when is it needed?","options":{"A":"Marks a field as excluded from serialization","B":"Prevents a field from being stored in CPU registers or reordered by the compiler/CPU — ensures reads/writes always go to main memory","C":"Makes a field thread-safe by adding a Monitor around every access","D":"Marks a method as subject to aggressive JIT optimisation"},"correct":"B","hint":"Without volatile on a flag field, a loop checking 'while (!_stop)' may spin forever because the compiler caches the value in a register.","explanation":"Without volatile, the compiler and CPU can cache field values in registers and reorder memory operations for performance. 'volatile' ensures every read/write of the field is a main memory access (with acquire/release semantics). Use it for simple boolean flags checked across threads. For more complex scenarios, use Interlocked or explicit memory barriers."},
-  {"id":"h042","question":"What is the Strangler Fig pattern for legacy .NET system modernisation?","options":{"A":"A pattern for gradually removing dead code from legacy systems","B":"Incrementally replacing a legacy system by routing new functionality to a new service while the old system handles remaining traffic — eventually strangling it","C":"A refactoring pattern that removes all static dependencies before migrating to DI","D":"A testing pattern that wraps legacy code in interfaces before replacing the implementations"},"correct":"B","hint":"Named after a vine that wraps a tree — new service grows around the old one until the old one can be shut down.","explanation":"The Strangler Fig pattern: place a façade (API gateway, reverse proxy) in front of the legacy system. New features are implemented in the new system; the façade routes them there. Gradually migrate existing functionality piece by piece to the new system. When migration is complete, the legacy system is removed. Zero-downtime migration of large monoliths."},
-  {"id":"h043","question":"What is a compiled query in EF Core and when does it provide performance benefits?","options":{"A":"A query stored as a database view and called via EF Core","B":"A pre-compiled LINQ expression tree that skips the translation and query planning phases on subsequent calls — beneficial for frequently executed queries","C":"A raw SQL string embedded in EF Core for maximum performance","D":"A cached query result that EF Core reuses across requests"},"correct":"B","hint":"EF Core caches query translations internally already, but compiled queries avoid even the cache lookup overhead for ultra-hot paths.","explanation":"EF Core 2+ has automatic query caching — translations are cached by query structure. Compiled queries (EF.CompileQuery) go further: they pre-build the translation and skip the cache lookup entirely. Benefit: significant on ultra-hot endpoints executing thousands of identical queries/sec. Define via EF.CompileQuery(() => ...) as a static field."},
-  {"id":"h044","question":"What is TPL Dataflow (System.Threading.Tasks.Dataflow) and what problems does it solve?","options":{"A":"A parallel sorting library for large datasets","B":"A library for building actor-based pipelines with configurable buffers, parallelism, and backpressure for data transformation workflows","C":"The threading primitives underlying the ThreadPool in .NET","D":"A distributed message passing framework for microservices"},"correct":"B","hint":"BufferBlock → TransformBlock → ActionBlock — a typed pipeline with bounded buffers and configurable parallelism per stage.","explanation":"TPL Dataflow models processing pipelines as a network of blocks. Each block has an input buffer, configurable MaxDegreeOfParallelism, and BoundedCapacity (backpressure). Data flows from block to block. It's ideal for ETL pipelines, producer-consumer chains, and actor-like concurrency within a process. Blocks are composable via LinkTo()."},
-  {"id":"h045","question":"What is AOT (Ahead-of-Time) compilation in .NET and what are its trade-offs?","options":{"A":"Compiling C# to native code during the build process, eliminating JIT at startup — benefits: fast startup, small memory footprint; trade-offs: no dynamic code generation, limited reflection","B":"A .NET mode that compiles all methods at startup instead of lazily","C":"A build configuration that ships IL code without the JIT compiler","D":"A .NET Framework feature not available in .NET Core"},"correct":"A","hint":"NativeAOT produces a standalone native executable — great for CLI tools and Lambda functions, but reflection and dynamic loading are restricted.","explanation":"NativeAOT compiles the entire application to native code at build time. Benefits: sub-millisecond startup (no JIT warmup), small memory footprint, no JIT dependency. Limitations: no dynamic assembly loading, limited Reflection.Emit, trimming required. Source generators replace reflection-heavy patterns. Essential for serverless (cold starts), CLIs, and edge deployments."},
-  {"id":"h046","question":"What is the difference between pessimistic and optimistic concurrency in database access from .NET?","options":{"A":"Pessimistic uses EF Core; optimistic uses Dapper","B":"Pessimistic locks the row at read time (SELECT FOR UPDATE / UPDLOCK hint) preventing others from modifying it; optimistic detects conflicts at write time using a version column","C":"Optimistic locking is only available in SQL Server; pessimistic works with any database","D":"They are equivalent strategies — the difference is only in terminology"},"correct":"B","hint":"Pessimistic: lock first, then read-modify-write. Optimistic: read freely, but check at write time if anyone changed it.","explanation":"Pessimistic concurrency: acquire a lock (e.g., BEGIN TRAN + SELECT ... WITH (UPDLOCK)) before reading, preventing concurrent writes. High contention, serialises access. Optimistic concurrency (EF Core RowVersion/ConcurrencyToken): read without a lock, check at save time that the row hasn't changed. DbUpdateConcurrencyException if it has. Better for low-contention scenarios."},
-  {"id":"h047","question":"What is CancellationTokenSource.CreateLinkedTokenSource and when do you use it?","options":{"A":"Creates a CancellationToken that links to a parent scope for DI lifetime management","B":"Creates a new CancellationToken that is cancelled when ANY of the linked source tokens are cancelled — combining multiple cancellation signals","C":"Links a CancellationToken to a Task so the Task cancels when the token fires","D":"Creates a CancellationToken that signals after a fixed timeout"},"correct":"B","hint":"Request cancellation OR a 30-second timeout — either should cancel the operation. Link both tokens.","explanation":"CreateLinkedTokenSource(token1, token2) returns a new CancellationTokenSource whose token is cancelled when either input token is cancelled. Common pattern: combine a caller-provided cancellationToken with a locally created timeout: using var cts = CancellationTokenSource.CreateLinkedTokenSource(callerToken, timeoutCts.Token)."},
-  {"id":"h048","question":"What is the Vertical Slice Architecture and how does it differ from Clean Architecture?","options":{"A":"An architecture where each microservice handles a vertical slice of all database tables","B":"Organising code by feature (vertical slice through all layers) rather than by technical layer — each feature folder contains its own models, handlers, and data access","C":"A pattern that slices the domain model vertically based on bounded contexts","D":"A UI pattern where each screen component owns its own data access logic"},"correct":"B","hint":"Instead of Controllers/Services/Repositories folders, you have Features/PlaceOrder/PlaceOrderHandler.cs containing everything for that feature.","explanation":"Vertical Slice Architecture (popularised by Jimmy Bogard) organises code by feature, not by layer. Each 'slice' (e.g., PlaceOrder) contains everything it needs: command/query model, handler, validation, data access. Features are largely independent — changing PlaceOrder doesn't affect GetOrderHistory. Less abstraction overhead, higher cohesion per feature, but potentially more duplication."},
-  {"id":"h049","question":"What is EventSource (.NET) and ETW (Event Tracing for Windows)?","options":{"A":"The .NET implementation of the Observer pattern for domain events","B":"A high-performance, structured diagnostic instrumentation framework built into .NET; ETW is the Windows infrastructure for consuming these events with near-zero overhead","C":"An ASP.NET Core event pipeline for handling HTTP lifecycle events","D":"A NuGet package providing Kafka-compatible event streaming in .NET"},"correct":"B","hint":"dotnet-counters, PerfView, and Application Insights all consume EventSource events. Writing to an EventSource has near-zero cost when no listener is attached.","explanation":"EventSource is .NET's high-performance diagnostic instrumentation system. When no listener is attached, emitting an event costs ~1ns (guarded by IsEnabled()). ETW is the Windows kernel facility that consumes these events with ring-buffer efficiency. Tools like PerfView, dotnet-trace, and Application Insights listen to EventSource events to capture runtime metrics (GC, allocations, requests)."},
-  {"id":"h050","question":"What is the SpinLock struct in .NET and when is it appropriate?","options":{"A":"A lock that uses a background thread to poll for availability","B":"A low-level lock that busy-waits (spins CPU) instead of yielding the thread — appropriate only for very short, contention-free critical sections where lock overhead would dominate","C":"A lock primitive that spins up a new thread for each waiter","D":"An async-compatible equivalent of Monitor for spin-based scenarios"},"correct":"B","hint":"It wastes CPU cycles but avoids the thread context switch overhead of Monitor — only justified if the critical section is measured in nanoseconds.","explanation":"SpinLock busy-waits (loops checking a flag) instead of yielding the thread to the OS. This avoids context switch overhead (~1–5μs). Only appropriate when: the critical section is extremely short (< a few hundred ns), there's low contention, and the thread can afford to burn CPU. For anything longer or more contended, Monitor/SemaphoreSlim are better."},
-  {"id":"h051","question":"What is the ICriticalNotifyCompletion interface and when is it relevant?","options":{"A":"An interface for implementing custom async state machines","B":"An interface that custom awaitables implement to ensure their continuation runs as a critical region, preventing thread abort interruptions","C":"A DI interface for registering services that must complete before application shutdown","D":"An interface that EF Core interceptors implement for transaction-critical operations"},"correct":"B","hint":"When building a custom awaitable type, implementing this interface ensures proper behavior with thread abort policies.","explanation":"ICriticalNotifyCompletion extends INotifyCompletion with UnsafeOnCompleted, which schedules the continuation without requiring a security demand (no stack walk). Custom awaitable types (TaskAwaiter, ValueTaskAwaiter) implement this to ensure continuations run even in restricted execution regions. Relevant when building custom awaitable patterns or async primitives."},
-  {"id":"h052","question":"What is the difference between GC.Collect(0), GC.Collect(1), and GC.Collect(2)?","options":{"A":"They trigger GC with different urgency levels — 2 is most urgent","B":"They collect different generations: 0 collects only Gen 0; 1 collects Gen 0 and Gen 1; 2 performs a full GC collecting all generations including LOH (with GCCollectionMode.Aggressive)","C":"They collect memory with different compaction strategies","D":"GC.Collect(0) is safe for production; GC.Collect(2) should never be called"},"correct":"B","hint":"Lower number = faster but less thorough. Full GC (Gen 2) collects everything, including the Large Object Heap.","explanation":"GC.Collect(n) triggers a collection of generations 0 through n. GC.Collect(0): fastest, only Gen 0. GC.Collect(1): Gen 0 + Gen 1. GC.Collect(2): full GC — all generations including LOH (if GCLargeObjectHeapCompactionMode.CompactOnce is set). Calling GC.Collect() manually disrupts the GC's tuning and is generally discouraged in production."},
-  {"id":"h053","question":"What is MemoryMarshal in .NET and what does it enable?","options":{"A":"A class for serializing objects to binary format without reflection","B":"A utility class providing low-level memory manipulation — casting spans between types, reinterpreting byte spans as structs, and reading primitive types from byte buffers","C":"A memory pool manager for the LOH","D":"A diagnostic tool for inspecting managed heap layout"},"correct":"B","hint":"MemoryMarshal.Read<int>(bytes) reads an int from a byte span without allocating — used in high-performance binary parsing.","explanation":"MemoryMarshal provides unsafe-but-managed memory operations: MemoryMarshal.Cast<byte, int>(span) reinterprets bytes as ints; MemoryMarshal.Read<T>(bytes) reads a T from bytes; MemoryMarshal.GetReference(span) gets an unsafe ref to the first element. Used in high-performance binary protocols (network parsers, binary file formats) to avoid allocations."},
-  {"id":"h054","question":"What is HTTP/2 multiplexing in .NET's HttpClient and why does it matter?","options":{"A":"HTTP/2 allows multiple responses to be received simultaneously on different ports","B":"HTTP/2 multiplexes multiple requests over a single TCP connection using streams, eliminating the per-request connection overhead of HTTP/1.1","C":"HTTP/2 compresses request headers but requires multiple TCP connections","D":"HTTP/2 multiplexing is automatically enabled for all HttpClient instances in .NET 6+"},"correct":"B","hint":"HTTP/1.1: one request per TCP connection (or pipelined). HTTP/2: hundreds of concurrent requests on one connection.","explanation":"HTTP/2 uses a single TCP connection with multiple virtual streams, each carrying one request/response pair. This eliminates connection establishment overhead per request and head-of-line blocking at the HTTP level. In .NET: HttpClient with SocketsHttpHandler supports HTTP/2 (HttpVersionPolicy.RequestVersionOrHigher). Dramatically reduces latency for services making many outbound API calls."},
-  {"id":"h055","question":"What is the difference between a bounded context and an aggregate in DDD?","options":{"A":"A bounded context is a single microservice; an aggregate is a database transaction boundary","B":"A bounded context defines a semantic boundary where a domain model is consistent and ubiquitous language applies; an aggregate is a consistency boundary within a bounded context","C":"They are synonymous — DDD uses both terms for the same concept","D":"An aggregate spans multiple bounded contexts; a bounded context spans multiple aggregates"},"correct":"B","hint":"Bounded context = where 'Order' means one specific thing. Aggregate = the Order root + its OrderLines that must change together.","explanation":"A Bounded Context is a subsystem with its own domain model and ubiquitous language — 'Order' in Sales has different attributes than 'Order' in Shipping. An Aggregate is a smaller consistency boundary within a bounded context: a cluster of entities/value objects that change together atomically. Multiple aggregates exist within a bounded context."},
-  {"id":"h056","question":"What is NativeMemory (introduced in .NET 6) and when would you use it?","options":{"A":"A class for allocating objects on the stack using unsafe code","B":"Direct allocation of unmanaged memory (malloc/free equivalent) — bypasses GC completely for large, long-lived buffers shared with native libraries","C":"A wrapper around stackalloc for dynamic-size stack buffers","D":"Memory mapped files for accessing OS-level memory regions"},"correct":"B","hint":"NativeMemory.Alloc(size) / NativeMemory.Free(ptr) — direct unmanaged heap allocation. Use for interop buffers or GC-bypass scenarios.","explanation":"NativeMemory.Alloc/AllocZeroed/Free/Realloc provide aligned, zeroed, and aligned allocations in unmanaged memory. Memory lives outside the GC heap entirely — no GC overhead, no finalisation queue. Use for: large pinned buffers for native interop, high-performance memory-mapped scenarios, or allocations that must outlive .NET object lifetimes. You are responsible for freeing."},
-  {"id":"h057","question":"What is the 'Thundering Herd' problem in distributed .NET caching and which pattern resolves it?","options":{"A":"High memory usage from caching too many large objects; resolved by LRU eviction","B":"Multiple concurrent requests simultaneously missing (or rebuilding) the same cache entry, stampeding the database; resolved by mutex-based cache population","C":"Cache poisoning from untrusted input; resolved by input validation","D":"Slow deserialization of cached objects; resolved by using MessagePack"},"correct":"B","hint":"When a popular entry expires, all 500 concurrent requests see a miss — all hit the database at once. Only one should rebuild.","explanation":"When a hot cache entry expires, all concurrent cache misses hit the database simultaneously. Resolve with a SemaphoreSlim(1,1): the first requester acquires the semaphore, rebuilds the cache, and releases; others wait and then read from cache. Alternatively, use probabilistic early expiration (random early refresh before expiry) or background refresh patterns."},
-  {"id":"h058","question":"What is mutation testing and how does it improve .NET test suites?","options":{"A":"Tests that inject random data mutations into method parameters to find edge cases","B":"A technique that automatically introduces small code mutations (flip a +, remove a condition) and checks whether tests catch them — measures true test effectiveness","C":"A testing strategy for testing database schema migrations","D":"Property-based testing using generated inputs to find unexpected mutations of state"},"correct":"B","hint":"If you delete a line of code and all tests still pass, that line was untested. Mutation testing automates this check.","explanation":"Mutation testing tools (Stryker.NET for .NET) introduce small faults (mutations) into production code: flip a > to >=, remove a return statement, change an && to ||. If tests pass despite the mutation, it's a 'survived mutant' — indicating a test gap. Mutation score measures what % of mutants were killed (tests failed as expected). It reveals tests that assert quantity without asserting correctness."},
-  {"id":"h059","question":"What is contract testing in a microservices .NET architecture?","options":{"A":"Testing that all services adhere to OpenAPI specifications","B":"Testing that service consumers and producers agree on the API contract — independently verifiable without running the full environment; typically using Pact","C":"Integration tests that verify SLA contracts between services","D":"Unit tests that verify DI interface contracts are correctly implemented"},"correct":"B","hint":"Consumer defines what it needs; provider verifies it can satisfy that contract — without deploying both services together.","explanation":"Contract testing (Pact, PactNet for .NET) separates consumer and provider testing. The consumer records its expectations as a 'pact' file. The provider runs pact verification tests against that file in isolation. This detects breaking API changes before deployment without running full end-to-end tests. Essential in CI/CD for microservices."},
-  {"id":"h060","question":"What is an incremental source generator in .NET and why is it preferred over the original API?","options":{"A":"A source generator that only processes files that changed since the last build","B":"A source generator using the IncrementalGeneratorInitializationContext API — designed for performance, caching intermediate results to avoid unnecessary re-execution during every IDE keystroke","C":"A source generator that incrementally adds methods to existing classes","D":"A generator that produces code one class at a time, streaming output to the compiler"},"correct":"B","hint":"The original ISourceGenerator runs on every keystroke in the IDE. Incremental generators cache and diff inputs — only recomputing when relevant syntax changes.","explanation":"Incremental source generators use a pipeline of ValueProvider transformations. The framework caches each stage — if inputs haven't changed, cached outputs are reused. This is critical for IDE responsiveness: the original ISourceGenerator ran on every edit, blocking the IDE. Incremental generators run only when relevant syntax nodes change, with fine-grained caching."}
+  {
+    "id": "h001",
+    "question": "What is the most common cause of a memory leak in .NET despite garbage collection?",
+    "options": {
+      "A": "Not calling Dispose() on every object, even those without unmanaged resources",
+      "B": "Event handler subscriptions where the publisher outlives the subscriber, preventing GC of the subscriber",
+      "C": "Using too many static variables in hot paths",
+      "D": "Creating objects inside loops"
+    },
+    "correct": "B",
+    "hint": "If object A subscribes to an event on long-lived object B, B holds a reference to A — A can never be collected.",
+    "explanation": "Event subscriptions create a reference from publisher to subscriber via the delegate. If the publisher (e.g., a singleton) outlives the subscriber, the subscriber is GC-rooted and never collected. Solution: unsubscribe in Dispose() or use WeakReference-based event patterns."
+  },
+  {
+    "id": "h002",
+    "question": "What does the `ref struct` modifier enforce in C#?",
+    "options": {
+      "A": "The struct is immutable (read-only)",
+      "B": "The struct may contain managed reference type fields",
+      "C": "The struct is stack-allocated only — it cannot be boxed, stored on the heap, or captured in lambdas",
+      "D": "The struct is reference-counted like COM objects"
+    },
+    "correct": "C",
+    "hint": "Span<T> is the canonical example — this constraint is what makes its zero-allocation guarantee possible.",
+    "explanation": "ref struct types can only live on the stack. They cannot be boxed, stored in fields of non-ref-struct types, assigned to interface variables, used as generic type arguments, or captured by lambdas. This enables Span<T> and ReadOnlySpan<T> to safely wrap stack memory without escaping."
+  },
+  {
+    "id": "h003",
+    "question": "In the Outbox pattern for microservices, what problem does it solve?",
+    "options": {
+      "A": "It reduces database round trips by batching writes",
+      "B": "It guarantees atomicity between saving to the database and publishing a message to the broker",
+      "C": "It provides an inbox for receiving messages reliably from other services",
+      "D": "It replaces the need for distributed transactions entirely"
+    },
+    "correct": "B",
+    "hint": "The message is written to an outbox table in the same DB transaction as the domain change.",
+    "explanation": "The Outbox pattern solves the dual-write problem: you write your domain change and the outgoing event to an outbox table in a single local transaction. A separate relay process reads the outbox and publishes to the message broker, guaranteeing at-least-once delivery without a distributed transaction."
+  },
+  {
+    "id": "h004",
+    "question": "In .NET's generational GC, why is Gen 0 collected so frequently compared to Gen 2?",
+    "options": {
+      "A": "Gen 0 stores static data which changes most often",
+      "B": "Gen 0 collection is free — it only exists during Server GC mode",
+      "C": "Gen 0 is tiny and most objects die young (generational hypothesis), making Gen 0 collections fast and frequent",
+      "D": "Generational GC is only active in 64-bit runtimes"
+    },
+    "correct": "C",
+    "hint": "Most allocations are short-lived — a button press, a request, a loop iteration. The GC exploits this.",
+    "explanation": "The generational hypothesis: most objects die young. Gen 0 is small (a few hundred KB), collected frequently in sub-milliseconds, and captures most dead objects cheaply. Survivors promote to Gen 1, then Gen 2. Gen 2 collections (full GC) are expensive. This design makes allocation nearly free on average."
+  },
+  {
+    "id": "h005",
+    "question": "What is the difference between optimistic and pessimistic concurrency control in Entity Framework Core?",
+    "options": {
+      "A": "Optimistic concurrency locks rows on read; pessimistic concurrency checks a version token on write",
+      "B": "Optimistic concurrency checks a version/timestamp token on write and throws on conflict; pessimistic locks the row on read to block others",
+      "C": "They are the same — EF Core uses whichever the database supports",
+      "D": "Pessimistic concurrency is only supported in NoSQL databases"
+    },
+    "correct": "B",
+    "hint": "Optimistic assumes conflicts are rare and detects them at save time.",
+    "explanation": "Optimistic concurrency uses a [ConcurrencyCheck] or [Timestamp] column. EF Core includes the original value in the WHERE clause on update; if zero rows are affected, a DbUpdateConcurrencyException is thrown. Pessimistic concurrency uses database-level row locking (e.g., SELECT FOR UPDATE) to block concurrent modifications."
+  },
+  {
+    "id": "h006",
+    "question": "What is a `ValueTask<T>` and when should you prefer it over `Task<T>`?",
+    "options": {
+      "A": "ValueTask<T> is a struct that avoids heap allocation when the result is available synchronously",
+      "B": "ValueTask<T> is faster in all scenarios and should always replace Task<T>",
+      "C": "ValueTask<T> is used for fire-and-forget operations that return void",
+      "D": "ValueTask<T> provides cancellation support that Task<T> lacks"
+    },
+    "correct": "A",
+    "hint": "If the result is cached and usually available synchronously, ValueTask avoids allocating a Task object.",
+    "explanation": "ValueTask<T> is a struct. If the result is already available (cache hit, synchronous path), no heap allocation occurs — unlike Task<T> which always allocates. Use ValueTask<T> for hot paths where synchronous completion is common. Avoid awaiting a ValueTask<T> more than once."
+  },
+  {
+    "id": "h007",
+    "question": "In SQL Server, what is the difference between `RANK()` and `DENSE_RANK()` window functions?",
+    "options": {
+      "A": "RANK() never skips numbers; DENSE_RANK() skips numbers on ties",
+      "B": "RANK() skips numbers after ties (1,2,2,4); DENSE_RANK() does not skip (1,2,2,3)",
+      "C": "DENSE_RANK() requires an ORDER BY; RANK() does not",
+      "D": "They are identical — the names are interchangeable"
+    },
+    "correct": "B",
+    "hint": "Two people tied for 2nd place — does 3rd place exist?",
+    "explanation": "RANK() assigns the same rank to tied rows but skips the next number (1,2,2,4 — rank 3 is skipped). DENSE_RANK() also assigns the same rank to tied rows but does not skip numbers (1,2,2,3). Choose based on whether gaps in the ranking sequence matter."
+  },
+  {
+    "id": "h008",
+    "question": "What is the purpose of the `SemaphoreSlim` class in C# concurrent programming?",
+    "options": {
+      "A": "A lock that only the thread that acquired it can release",
+      "B": "A lightweight semaphore that limits the number of concurrent accesses to a resource, supporting async awaiting",
+      "C": "A mechanism for signal-and-wait between exactly two threads",
+      "D": "A read/write lock that allows multiple simultaneous readers"
+    },
+    "correct": "B",
+    "hint": "Unlike Semaphore, SemaphoreSlim supports WaitAsync() for async use.",
+    "explanation": "SemaphoreSlim is a lightweight semaphore that limits concurrent access to a resource to a configurable count. It supports both synchronous Wait() and asynchronous WaitAsync(), making it ideal for throttling concurrent async operations (e.g., limiting parallel HTTP requests)."
+  },
+  {
+    "id": "h009",
+    "question": "In C#, what is the Visitor pattern and when is it most appropriate?",
+    "options": {
+      "A": "A pattern for traversing tree structures depth-first",
+      "B": "A pattern that lets you add new operations to an object hierarchy without modifying the classes, using double dispatch",
+      "C": "A pattern for routing HTTP requests to handler classes",
+      "D": "A pattern for lazy initialization of expensive objects"
+    },
+    "correct": "B",
+    "hint": "The element calls Accept(visitor) which calls visitor.Visit(this) — that is double dispatch.",
+    "explanation": "The Visitor pattern separates algorithms from the objects they operate on. Each element has an Accept(IVisitor) method that calls the visitor's Visit method with itself. This enables adding new operations across a hierarchy without touching the element classes — ideal when the hierarchy is stable but operations vary."
+  },
+  {
+    "id": "h010",
+    "question": "In SQL Server, what does a non-clustered index's leaf level contain when the table has a clustered index?",
+    "options": {
+      "A": "A pointer (row ID file:page:slot) directly to the heap page",
+      "B": "The full row data duplicated from the base table",
+      "C": "The clustered index key(s) used as a bookmark lookup key",
+      "D": "A hash of the row for fast equality comparisons"
+    },
+    "correct": "C",
+    "hint": "This is why key lookups (RID lookups on heaps vs Key lookups on clustered tables) differ.",
+    "explanation": "When a table has a clustered index, non-clustered index leaf nodes store the clustered index key as a row locator. SQL Server uses this key for a Key Lookup to retrieve columns not in the non-clustered index. On a heap (no clustered index), the locator is a Row ID (file:page:slot)."
+  },
+  {
+    "id": "h011",
+    "question": "What is the purpose of `Channel<T>` in .NET and how does it differ from `ConcurrentQueue<T>`?",
+    "options": {
+      "A": "Channel<T> is for network I/O; ConcurrentQueue<T> is for in-process communication",
+      "B": "Channel<T> is a higher-level producer-consumer primitive with backpressure, async support, and completion signaling; ConcurrentQueue is a raw thread-safe queue",
+      "C": "They are identical — Channel<T> is just a wrapper around ConcurrentQueue<T>",
+      "D": "ConcurrentQueue<T> supports bounded capacity; Channel<T> is always unbounded"
+    },
+    "correct": "B",
+    "hint": "Channels support WriteAsync/ReadAsync and signal completion to consumers.",
+    "explanation": "Channel<T> (System.Threading.Channels) is a high-level producer-consumer abstraction supporting async reads/writes, bounded or unbounded capacity with backpressure, and completion signals. ConcurrentQueue<T> is a raw lock-free FIFO queue with no async support or completion notification."
+  },
+  {
+    "id": "h012",
+    "question": "In microservices, what does the Strangler Fig pattern describe?",
+    "options": {
+      "A": "A security pattern that gradually restricts service permissions over time",
+      "B": "An incremental migration strategy where new microservices gradually replace a monolith by intercepting its functionality",
+      "C": "A monitoring pattern that chokes off traffic to failing services",
+      "D": "A load balancing strategy that routes traffic based on service health"
+    },
+    "correct": "B",
+    "hint": "Named after the fig tree that grows around and eventually replaces its host tree.",
+    "explanation": "The Strangler Fig pattern incrementally migrates a monolith to microservices. A facade intercepts calls to the monolith and routes them to new microservices as they are built. Over time, the monolith is 'strangled' until only microservices remain. This reduces risk compared to a big-bang rewrite."
+  },
+  {
+    "id": "h013",
+    "question": "What does `ArrayPool<T>.Shared` provide in .NET and why is it beneficial?",
+    "options": {
+      "A": "A fixed-size array shared across all threads for performance",
+      "B": "A pool of reusable arrays that reduces GC pressure by avoiding repeated large array allocations",
+      "C": "A thread-safe array that supports concurrent reads and writes",
+      "D": "An array that is automatically resized when capacity is exceeded"
+    },
+    "correct": "B",
+    "hint": "Rent an array, use it, then return it — avoiding heap allocations in hot paths.",
+    "explanation": "ArrayPool<T>.Shared is a shared pool of reusable arrays. Renting an array returns an existing one from the pool (avoiding GC pressure), and returning it makes it available for reuse. This is critical in high-throughput scenarios like ASP.NET Core request processing."
+  },
+  {
+    "id": "h014",
+    "question": "In ASP.NET Core, what is the difference between `IActionResult` and `ActionResult<T>`?",
+    "options": {
+      "A": "IActionResult supports async methods; ActionResult<T> is for synchronous actions",
+      "B": "ActionResult<T> enables OpenAPI/Swagger to infer the response type for documentation; IActionResult does not expose the type",
+      "C": "They are identical — ActionResult<T> is just a generic alias",
+      "D": "IActionResult is for controllers; ActionResult<T> is for minimal API endpoints only"
+    },
+    "correct": "B",
+    "hint": "Swagger can generate the response schema only when the return type is declared.",
+    "explanation": "ActionResult<T> lets ASP.NET Core (and tools like Swashbuckle) infer the success response type T for documentation and client generation. IActionResult is opaque — the framework cannot infer the body type. ActionResult<T> also allows returning T directly or any IActionResult (Ok, NotFound, etc.)."
+  },
+  {
+    "id": "h015",
+    "question": "What is the `IHostedService` interface used for in ASP.NET Core?",
+    "options": {
+      "A": "To define a service with Singleton DI lifetime",
+      "B": "To run background tasks that start and stop with the application host lifecycle",
+      "C": "To register middleware that runs before controllers",
+      "D": "To define health check endpoints"
+    },
+    "correct": "B",
+    "hint": "BackgroundService is the abstract base class that implements IHostedService for long-running tasks.",
+    "explanation": "IHostedService defines StartAsync and StopAsync methods called by the host when the application starts and stops. BackgroundService is a convenient abstract base class that implements IHostedService, exposing ExecuteAsync for long-running background work like message queue consumers."
+  },
+  {
+    "id": "h016",
+    "question": "In C#, what is the difference between `Monitor` and `Mutex`?",
+    "options": {
+      "A": "Monitor is for cross-process locking; Mutex is for single-process locking",
+      "B": "Monitor is a managed, thread-affine lock (fast, in-process); Mutex is a kernel object that works across processes",
+      "C": "Mutex supports WaitAsync(); Monitor does not",
+      "D": "They are identical — `lock` uses Mutex internally"
+    },
+    "correct": "B",
+    "hint": "The `lock` statement is syntactic sugar for Monitor.Enter/Exit.",
+    "explanation": "Monitor is a managed CLR synchronization primitive — very fast, limited to one process. The `lock` statement compiles to Monitor.Enter/Exit. Mutex is a Windows kernel object, much slower, but can be named and shared across processes to implement system-wide mutual exclusion."
+  },
+  {
+    "id": "h017",
+    "question": "In SQL Server, what is a Filtered Index and when should you use it?",
+    "options": {
+      "A": "An index that automatically removes duplicate rows from query results",
+      "B": "A non-clustered index with a WHERE clause that indexes only a subset of rows, making it smaller and more selective",
+      "C": "An index that includes all columns of a table for covering purposes",
+      "D": "A full-text index that filters stop words"
+    },
+    "correct": "B",
+    "hint": "Perfect for columns with many NULLs or a sparse set of interesting values.",
+    "explanation": "A Filtered Index includes a WHERE clause, so only rows satisfying the condition are indexed. This produces a smaller, more efficient index for sparse data (e.g., WHERE Status = 'Active' or WHERE DeletedAt IS NOT NULL). It improves query performance and reduces maintenance overhead compared to a full index."
+  },
+  {
+    "id": "h018",
+    "question": "What does the `Interlocked` class provide in concurrent .NET code?",
+    "options": {
+      "A": "A UI thread dispatcher for safely updating WPF/WinForms controls from background threads",
+      "B": "Atomic read-modify-write operations on primitive types without using a lock",
+      "C": "A lock-free linked list implementation",
+      "D": "Thread-local storage accessible across thread boundaries"
+    },
+    "correct": "B",
+    "hint": "Interlocked.Increment, CompareExchange — these are CPU-level atomic operations.",
+    "explanation": "The Interlocked class provides CPU-level atomic operations (Increment, Decrement, Add, CompareExchange, Exchange) on shared integer, long, and reference types. These are faster than a lock and essential for lock-free data structure implementation and performance counters."
+  },
+  {
+    "id": "h019",
+    "question": "What is the primary role of the `IServiceScopeFactory` in ASP.NET Core?",
+    "options": {
+      "A": "To create new DI container instances for each microservice",
+      "B": "To create DI scopes manually — enabling scoped services to be resolved in singleton or background service contexts",
+      "C": "To validate that all registered services can be constructed at startup",
+      "D": "To replace IServiceProvider with a faster implementation"
+    },
+    "correct": "B",
+    "hint": "You cannot directly inject a scoped service into a singleton — create a scope first.",
+    "explanation": "IServiceScopeFactory.CreateScope() creates a new DI scope, allowing you to resolve Scoped services (like DbContext) safely inside a Singleton or background service. Without a scope, resolving a Scoped service from the root container causes a captive dependency error."
+  },
+  {
+    "id": "h020",
+    "question": "In SQL Server, what is the purpose of `sp_executesql` over `EXEC(@sql)`?",
+    "options": {
+      "A": "sp_executesql runs faster because it bypasses the query optimizer",
+      "B": "sp_executesql supports parameterized dynamic SQL, enabling plan reuse and preventing SQL injection",
+      "C": "EXEC is deprecated; sp_executesql is the only supported method",
+      "D": "sp_executesql encrypts the SQL statement before execution"
+    },
+    "correct": "B",
+    "hint": "Parameters mean the query text stays the same across executions — the plan is cached.",
+    "explanation": "sp_executesql accepts a parameterized SQL string and parameter declarations separately. Because parameters are not embedded in the SQL text, the query plan can be cached and reused, improving performance. It also prevents SQL injection by treating parameter values as data, not executable code."
+  },
+  {
+    "id": "h021",
+    "question": "What is the Proxy pattern and how does it differ from the Decorator pattern?",
+    "options": {
+      "A": "Proxy adds behavior to an object; Decorator controls access to it",
+      "B": "Proxy controls access to an object (lazy init, remote, security); Decorator adds new behaviors — both wrap the same interface but with different intent",
+      "C": "They are the same pattern with different naming conventions",
+      "D": "Proxy is for value types; Decorator is for reference types"
+    },
+    "correct": "B",
+    "hint": "Intent distinguishes them: Proxy manages access/lifecycle; Decorator adds responsibilities.",
+    "explanation": "Both patterns wrap an object implementing the same interface. Proxy's intent is to control access — lazy initialization, remote access, access control, or logging without changing behavior. Decorator's intent is to add new behaviors dynamically. The structural difference is subtle; intent and use case are the distinguishing factors."
+  },
+  {
+    "id": "h022",
+    "question": "In C#, what does `stackalloc` do and what are its constraints?",
+    "options": {
+      "A": "Allocates an object on the GC heap with a fixed address",
+      "B": "Allocates a block of memory on the stack, avoiding heap allocation, but it is freed when the method returns",
+      "C": "Pins a managed array in memory so unmanaged code can access it",
+      "D": "Reserves virtual memory for later commit"
+    },
+    "correct": "B",
+    "hint": "Combine with Span<T> to use stackalloc safely with bounds checking.",
+    "explanation": "stackalloc allocates a contiguous block of memory on the call stack. It is freed automatically when the method returns. It cannot be returned from a method, cannot be assigned to non-ref-struct variables, and stack space is limited. Use with Span<T> (e.g., Span<byte> buf = stackalloc byte[256]) for safe, bounds-checked access."
+  },
+  {
+    "id": "h023",
+    "question": "What is the Flyweight pattern and when is it applicable?",
+    "options": {
+      "A": "A pattern for creating lightweight proxy objects that defer expensive initialization",
+      "B": "A pattern that shares common state (intrinsic) across many fine-grained objects to reduce memory consumption",
+      "C": "A pattern for creating thread-safe singleton factories",
+      "D": "A pattern for reducing the number of virtual dispatch calls in hot paths"
+    },
+    "correct": "B",
+    "hint": "Character glyphs in a text editor — shared font/style data, unique position per character.",
+    "explanation": "The Flyweight pattern minimizes memory use by sharing as much data as possible between similar objects. Intrinsic state (shared, immutable) is stored in a flyweight; extrinsic state (context-specific) is passed in. Classic use cases: character glyphs in a document editor, particles in a game engine."
+  },
+  {
+    "id": "h024",
+    "question": "In SQL Server, what is a columnstore index and what workload benefits most from it?",
+    "options": {
+      "A": "An index that stores data sorted by column name alphabetically",
+      "B": "A column-oriented compressed index ideal for analytical (OLAP) queries that aggregate large ranges of data",
+      "C": "An index optimized for high-frequency single-row lookups (OLTP)",
+      "D": "A full-text index that stores columns as inverted word lists"
+    },
+    "correct": "B",
+    "hint": "Columnstore compresses columns separately — aggregating one column reads only that column's data.",
+    "explanation": "A Columnstore Index stores data column-by-column (not row-by-row). Each column is highly compressed using run-length encoding and dictionary encoding. Analytical queries that aggregate a few columns across millions of rows see dramatic performance gains because only relevant column data is read. OLTP workloads (single-row operations) are better served by traditional B-tree indexes."
+  },
+  {
+    "id": "h025",
+    "question": "What is the purpose of the `[ThreadStatic]` attribute in C#?",
+    "options": {
+      "A": "It makes a static field read-only after first assignment",
+      "B": "It gives each thread its own independent copy of the static field",
+      "C": "It prevents a static field from being garbage collected",
+      "D": "It locks access to a static field on each thread boundary"
+    },
+    "correct": "B",
+    "hint": "Useful for per-thread state like ambient contexts or random number generators.",
+    "explanation": "[ThreadStatic] marks a static field so each thread gets its own independent instance of the field. The field is initialized per-thread to the default value (not the declared initializer, except for the first thread). ThreadLocal<T> is the modern alternative, supporting initializers reliably across all threads."
+  },
+  {
+    "id": "h026",
+    "question": "In ASP.NET Core, what is minimal hosting and how does it differ from Startup-based hosting?",
+    "options": {
+      "A": "Minimal hosting removes DI support and is used for performance-critical microservices",
+      "B": "Minimal hosting (WebApplication.CreateBuilder) merges configuration, services, and pipeline setup into Program.cs, eliminating the separate Startup class",
+      "C": "Minimal hosting runs without Kestrel and uses IIS directly",
+      "D": "They are identical — minimal hosting is just a renamed Startup"
+    },
+    "correct": "B",
+    "hint": "Introduced in .NET 6 — no more Startup.cs, everything in Program.cs.",
+    "explanation": "Minimal hosting (introduced in .NET 6) consolidates all setup into Program.cs using WebApplication.CreateBuilder(). It merges ConfigureServices and Configure into a single linear flow. The Startup class pattern is still supported but is no longer the default or recommended approach."
+  },
+  {
+    "id": "h027",
+    "question": "What is the Double-Checked Locking pattern for thread-safe lazy initialization in C#?",
+    "options": {
+      "A": "Checking a condition twice in a loop before acquiring a lock",
+      "B": "Checking if an instance is null before locking, then checking again inside the lock, with the field marked volatile",
+      "C": "Using two separate locks to prevent deadlock in initialization",
+      "D": "A pattern that uses Interlocked.CompareExchange to avoid any locking"
+    },
+    "correct": "B",
+    "hint": "The volatile keyword is essential — without it, the CPU or JIT may reorder the write.",
+    "explanation": "Double-checked locking checks for null without locking (fast path), then locks and checks again (to handle the race between threads reaching the lock). The field must be volatile to prevent instruction reordering by the CPU/JIT from allowing a partially constructed object to be observed. Lazy<T> is the idiomatic modern alternative."
+  },
+  {
+    "id": "h028",
+    "question": "In SQL Server, what is the difference between `MERGE` and a combination of separate `INSERT/UPDATE/DELETE` statements?",
+    "options": {
+      "A": "MERGE is slower because it requires a full table scan",
+      "B": "MERGE performs insert, update, and delete in a single statement and scan, often more efficient and atomic than separate statements",
+      "C": "They are identical in performance — MERGE is just syntactic sugar",
+      "D": "MERGE cannot be used with indexed views or triggers"
+    },
+    "correct": "B",
+    "hint": "MERGE scans the source and target once and performs all three DML operations in one pass.",
+    "explanation": "MERGE matches source rows to target rows once and applies INSERT (no match), UPDATE (match, values differ), or DELETE (match in target but not source) in a single statement. This avoids multiple separate scans and is atomic. However, MERGE has known edge cases with concurrent workloads — use with care."
+  },
+  {
+    "id": "h029",
+    "question": "What is the Abstract Factory pattern and how does it differ from the Factory Method pattern?",
+    "options": {
+      "A": "Abstract Factory creates one product type; Factory Method creates families of related products",
+      "B": "Abstract Factory provides an interface for creating families of related objects without specifying concrete classes; Factory Method defines a single creation method in a subclass",
+      "C": "They are identical — Abstract Factory is just a renamed Factory Method",
+      "D": "Factory Method requires an abstract class; Abstract Factory requires an interface"
+    },
+    "correct": "B",
+    "hint": "Abstract Factory = factory of factories, producing consistent families of objects.",
+    "explanation": "Factory Method defines a single virtual/abstract method for creating one product, delegating the choice to subclasses. Abstract Factory provides multiple factory methods grouped in an interface to create families of related objects (e.g., a UI factory that creates Button + Checkbox + Scrollbar consistently for a platform)."
+  },
+  {
+    "id": "h030",
+    "question": "In .NET, what is the difference between `Task.Run` and `Task.Factory.StartNew`?",
+    "options": {
+      "A": "Task.Run only works in ASP.NET Core; Task.Factory.StartNew works everywhere",
+      "B": "Task.Run is a simpler, safer wrapper for CPU-bound work on the ThreadPool; Task.Factory.StartNew exposes advanced options like TaskCreationOptions and custom schedulers",
+      "C": "They are identical — Task.Run delegates to Task.Factory.StartNew internally with no differences",
+      "D": "Task.Factory.StartNew returns a cold task that must be started manually"
+    },
+    "correct": "B",
+    "hint": "Task.Run uses sensible defaults; Task.Factory.StartNew lets you configure scheduling and parent task options.",
+    "explanation": "Task.Run is a shorthand for Task.Factory.StartNew with DenyChildAttach and ThreadPool scheduler — safe defaults for most scenarios. Task.Factory.StartNew offers finer control: parent-child task relationships, custom schedulers, LongRunning (dedicated thread), and AttachedToParent, needed in specific advanced scenarios."
+  },
+  {
+    "id": "h031",
+    "question": "What is the purpose of `IDistributedCache` in ASP.NET Core and how does it differ from `IMemoryCache`?",
+    "options": {
+      "A": "IDistributedCache uses the hard disk; IMemoryCache uses RAM",
+      "B": "IDistributedCache works across multiple server instances (e.g., Redis, SQL Server); IMemoryCache is local to one process",
+      "C": "They are interchangeable — the implementation is the only difference",
+      "D": "IMemoryCache persists data across restarts; IDistributedCache does not"
+    },
+    "correct": "B",
+    "hint": "Scale-out to multiple pods? You need a distributed cache.",
+    "explanation": "IDistributedCache stores data in a shared external store (Redis, SQL Server, NCache) accessible by all application instances in a cluster. IMemoryCache is local to a single process — data is lost on restart and invisible to other instances. In horizontally scaled deployments, IDistributedCache is required for shared state."
+  },
+  {
+    "id": "h032",
+    "question": "In C#, what is an `Expression<Func<T, bool>>` and how is it different from `Func<T, bool>`?",
+    "options": {
+      "A": "Expression trees are faster than compiled delegates at runtime",
+      "B": "Expression<Func<T, bool>> stores the code as an inspectable data structure (expression tree) that providers (e.g., EF Core) can translate to SQL; Func<T, bool> is a compiled delegate",
+      "C": "Func<T, bool> supports async; Expression<Func<T, bool>> does not",
+      "D": "They are identical — the compiler compiles both to the same IL"
+    },
+    "correct": "B",
+    "hint": "EF Core translates Expression trees to SQL WHERE clauses — it cannot do this with compiled Func delegates.",
+    "explanation": "Expression<Func<T, bool>> stores the lambda as a data structure (expression tree) that can be inspected, traversed, and translated at runtime (e.g., into SQL by EF Core). Func<T, bool> is already compiled — it can be invoked but not translated. Passing Func to IQueryable forces in-memory evaluation."
+  },
+  {
+    "id": "h033",
+    "question": "What does SQL Server's `SNAPSHOT` isolation level guarantee?",
+    "options": {
+      "A": "No other transaction can read data being modified by the current transaction",
+      "B": "Each statement reads a consistent snapshot of data as it existed at the start of the transaction, using row versioning",
+      "C": "All reads are blocked until the current transaction commits",
+      "D": "Reads are non-repeatable — data may change between two reads within the same transaction"
+    },
+    "correct": "B",
+    "hint": "Writers do not block readers; readers do not block writers.",
+    "explanation": "Snapshot isolation gives each transaction a consistent view of data as it existed at the transaction start time, using row versions stored in tempdb. Writers do not block readers and vice versa. This eliminates dirty reads, non-repeatable reads, and phantom reads without taking shared locks."
+  },
+  {
+    "id": "h034",
+    "question": "In C#, what is the `Composite` pattern?",
+    "options": {
+      "A": "A pattern for composing functions using LINQ method chaining",
+      "B": "A pattern that lets clients treat individual objects and groups of objects uniformly through a shared interface",
+      "C": "A pattern that combines multiple interfaces into one for convenience",
+      "D": "A pattern for aggregating multiple services into a single API endpoint"
+    },
+    "correct": "B",
+    "hint": "A file system: files and folders share the same interface — you can delete both the same way.",
+    "explanation": "The Composite pattern organizes objects into tree structures and lets clients treat individual objects (leaves) and compositions (composites) through the same interface. A classic example is a file system where both File and Directory implement IFileSystemEntry with methods like GetSize()."
+  },
+  {
+    "id": "h035",
+    "question": "What is a `P/Invoke` in .NET and when is it used?",
+    "options": {
+      "A": "A .NET mechanism for calling methods in another .NET assembly",
+      "B": "Platform Invocation Services — enables managed C# code to call unmanaged functions in native DLLs (Win32, C libraries)",
+      "C": "A pattern for calling async methods in a synchronous context",
+      "D": "A performance optimization that inlines native code into managed assemblies"
+    },
+    "correct": "B",
+    "hint": "[DllImport(\"kernel32.dll\")] is the classic P/Invoke declaration.",
+    "explanation": "P/Invoke (Platform Invocation Services) allows managed .NET code to call exported functions from unmanaged DLLs. You declare the function signature with [DllImport]. The runtime marshals parameters between managed and unmanaged types. Used for OS APIs (Win32), hardware interfaces, and legacy C/C++ libraries."
+  },
+  {
+    "id": "h036",
+    "question": "In microservices, what is the Backend for Frontend (BFF) pattern?",
+    "options": {
+      "A": "A backend service that only serves static files to frontends",
+      "B": "A dedicated backend optimized for a specific frontend (mobile, web, IoT), aggregating and shaping data from downstream services",
+      "C": "A database-per-frontend pattern to isolate data access",
+      "D": "A reverse proxy that caches API responses for frontend clients"
+    },
+    "correct": "B",
+    "hint": "Mobile needs less data than desktop — why force them through the same generic API?",
+    "explanation": "The BFF pattern creates a separate backend service per frontend type (e.g., one BFF for mobile, one for web). Each BFF aggregates calls to downstream microservices and shapes responses to the specific needs of its frontend, reducing over-fetching and coupling."
+  },
+  {
+    "id": "h037",
+    "question": "What does the `unsafe` keyword enable in C# and what are its risks?",
+    "options": {
+      "A": "It disables all runtime exceptions for performance",
+      "B": "It allows pointer arithmetic and direct memory manipulation, bypassing type safety and GC tracking",
+      "C": "It enables calling methods that are marked as deprecated",
+      "D": "It turns off null reference checks in the method"
+    },
+    "correct": "B",
+    "hint": "Use fixed() to pin a managed object before taking a pointer to it.",
+    "explanation": "The unsafe keyword enables pointer types, pointer arithmetic, and the address-of operator in C#. Code using unsafe bypasses the CLR's type safety guarantees and GC tracking. You can corrupt memory, cause segfaults, or introduce security vulnerabilities. It requires the /unsafe compiler flag and should be minimal, isolated, and carefully audited."
+  },
+  {
+    "id": "h038",
+    "question": "In SQL Server, what does the `INCLUDE` clause in a CREATE INDEX statement do?",
+    "options": {
+      "A": "It forces the index to include all columns of the table",
+      "B": "It adds non-key columns to the leaf level of a non-clustered index, enabling covering queries without key column overhead",
+      "C": "It includes a WHERE clause filter on the index",
+      "D": "It instructs SQL Server to include the index in query plans"
+    },
+    "correct": "B",
+    "hint": "A covering index can satisfy a query entirely from the index, avoiding a Key Lookup.",
+    "explanation": "The INCLUDE clause adds columns to the leaf pages of a non-clustered index without including them in the index key. This makes the index covering for queries that SELECT those columns, eliminating expensive Key Lookups. Included columns do not affect sort order or the maximum key size limit."
+  },
+  {
+    "id": "h039",
+    "question": "What is the `Mediator` pattern and how does it reduce coupling?",
+    "options": {
+      "A": "It caches responses from multiple services and returns them on demand",
+      "B": "It centralizes communication between objects through a mediator object, so objects do not reference each other directly",
+      "C": "It converts incompatible interfaces into a compatible one",
+      "D": "It chains multiple handlers for a single request"
+    },
+    "correct": "B",
+    "hint": "Air traffic control is the classic analogy — planes talk to the tower, not each other.",
+    "explanation": "The Mediator pattern defines an object that encapsulates how a set of objects interact. Instead of objects knowing about and referencing each other (many-to-many coupling), they all communicate through the mediator (many-to-one to one-to-many). This reduces coupling and centralizes complex interaction logic."
+  },
+  {
+    "id": "h040",
+    "question": "In C#, what is the difference between `Task.Delay` and `Thread.Sleep`?",
+    "options": {
+      "A": "Task.Delay blocks the current thread; Thread.Sleep releases the thread",
+      "B": "Task.Delay is asynchronous and does not block the thread; Thread.Sleep blocks the thread for the duration",
+      "C": "They are identical in behavior — only the API style differs",
+      "D": "Thread.Sleep supports cancellation; Task.Delay does not"
+    },
+    "correct": "B",
+    "hint": "await Task.Delay frees the thread to do other work; Thread.Sleep holds it.",
+    "explanation": "Task.Delay returns an awaitable that completes after the specified duration without blocking any thread. Thread.Sleep blocks the calling thread for the full duration, preventing it from serving other work. In async code, always use await Task.Delay; never use Thread.Sleep."
+  },
+  {
+    "id": "h041",
+    "question": "What does SQL Server's Query Store feature do?",
+    "options": {
+      "A": "It stores the T-SQL text of all queries for auditing purposes",
+      "B": "It persists query plans, runtime statistics, and wait stats to detect plan regressions and force stable plans",
+      "C": "It caches query results so identical queries return instantly",
+      "D": "It stores pre-compiled stored procedures in memory for faster execution"
+    },
+    "correct": "B",
+    "hint": "Enabled per database — great for catching plan regressions after index changes or upgrades.",
+    "explanation": "Query Store persists query plans and associated runtime statistics (CPU, I/O, wait times) inside the database. It lets DBAs identify regressed queries (where a plan changed and performance degraded), compare plans over time, and force a specific plan using FORCE PLAN to restore stable performance."
+  },
+  {
+    "id": "h042",
+    "question": "In C#, what is the difference between `covariance` and `contravariance` in generics?",
+    "options": {
+      "A": "Covariance allows use of a more derived type than specified; contravariance allows a less derived type",
+      "B": "Covariance is for value types; contravariance is for reference types",
+      "C": "They are only applicable to concrete classes, not interfaces",
+      "D": "Covariance is declared with in; contravariance with out"
+    },
+    "correct": "A",
+    "hint": "IEnumerable<out T> is covariant — you can assign IEnumerable<Dog> to IEnumerable<Animal>.",
+    "explanation": "Covariance (out T) allows a more derived type to substitute a base type, e.g., IEnumerable<Dog> assigned to IEnumerable<Animal>. Contravariance (in T) allows a less derived type, e.g., Action<Animal> assigned to Action<Dog>. Covariance works for output (return) positions; contravariance for input (parameter) positions."
+  },
+  {
+    "id": "h043",
+    "question": "What is the Interpreter pattern?",
+    "options": {
+      "A": "A pattern that translates one programming language to another at compile time",
+      "B": "A pattern that defines a grammar for a language and provides an interpreter to process sentences in that language",
+      "C": "A pattern for decoding binary protocols into structured objects",
+      "D": "A pattern for converting data between two incompatible formats"
+    },
+    "correct": "B",
+    "hint": "LINQ expression parsing, regular expression engines, and SQL parsers are real-world examples.",
+    "explanation": "The Interpreter pattern represents sentences in a language as a class hierarchy (grammar), where each rule is a class with an Interpret() method. It is suitable for simple grammars where performance is not critical. Complex grammars are better served by parser generators."
+  },
+  {
+    "id": "h044",
+    "question": "In ASP.NET Core, what does `IApplicationBuilder.Use` vs `IApplicationBuilder.Run` do differently?",
+    "options": {
+      "A": "Use starts the application; Run registers middleware",
+      "B": "Use registers middleware that can call the next middleware; Run registers a terminal middleware that ends the pipeline",
+      "C": "They are identical — Run is just an alias for Use",
+      "D": "Use is for synchronous middleware; Run is for async middleware"
+    },
+    "correct": "B",
+    "hint": "Run = terminal handler. Use = pass-through middleware that calls next().",
+    "explanation": "Use() adds middleware that receives the next delegate and can choose to call it to pass control forward, or short-circuit. Run() adds a terminal middleware that does not receive a next delegate — it always ends the pipeline. Using Run() before other middleware would make them unreachable."
+  },
+  {
+    "id": "h045",
+    "question": "What is the State pattern in software design?",
+    "options": {
+      "A": "A pattern for persisting object state to a database",
+      "B": "A pattern where an object's behavior changes based on its internal state, with each state encapsulated in a separate class",
+      "C": "A pattern for tracking undo/redo history of an object",
+      "D": "A pattern for managing shared application state across services"
+    },
+    "correct": "B",
+    "hint": "A vending machine or a traffic light are classic analogies.",
+    "explanation": "The State pattern allows an object to change its behavior when its internal state changes. Each state is represented by a class implementing a common interface. The context delegates behavior to the current state object, making state-specific behavior explicit and the state transitions manageable."
+  },
+  {
+    "id": "h046",
+    "question": "In SQL Server, what does `OPTION (RECOMPILE)` do in a query hint?",
+    "options": {
+      "A": "Permanently saves the query plan for future reuse",
+      "B": "Forces SQL Server to generate a fresh execution plan for this execution, using the current parameter values",
+      "C": "Clears the plan cache for the entire database",
+      "D": "Tells the optimizer to use parallel execution"
+    },
+    "correct": "B",
+    "hint": "Useful for queries with highly variable parameters where a cached plan performs poorly for some inputs.",
+    "explanation": "OPTION (RECOMPILE) causes SQL Server to compile a new execution plan each time the query runs, using the actual current parameter values (parameter embedding). This avoids parameter sniffing problems where a cached plan is suboptimal for the current inputs, at the cost of compile time on every execution."
+  },
+  {
+    "id": "h047",
+    "question": "What does the `[StructLayout(LayoutKind.Sequential)]` attribute do in C#?",
+    "options": {
+      "A": "Forces the struct to be immutable at compile time",
+      "B": "Guarantees that the struct's fields are laid out in memory in declaration order for unmanaged interop",
+      "C": "Makes the struct thread-safe by serializing access",
+      "D": "Allows the struct to be used as a generic type argument"
+    },
+    "correct": "B",
+    "hint": "Required when marshaling structs to C/C++ functions via P/Invoke.",
+    "explanation": "[StructLayout(LayoutKind.Sequential)] instructs the CLR to lay out the struct's fields in memory in their declaration order, without padding rearrangement. This ensures the memory layout matches what C/C++ or OS APIs expect, which is critical for P/Invoke interop and direct memory manipulation."
+  },
+  {
+    "id": "h048",
+    "question": "In microservices, what is service mesh and what does it provide?",
+    "options": {
+      "A": "A UI dashboard for monitoring microservices in real time",
+      "B": "An infrastructure layer (sidecar proxies) that handles service-to-service communication, mTLS, load balancing, retries, and observability transparently",
+      "C": "A shared database layer that all microservices connect to",
+      "D": "An API gateway variant deployed inside the cluster"
+    },
+    "correct": "B",
+    "hint": "Istio and Linkerd are popular implementations — no application code changes required.",
+    "explanation": "A service mesh (e.g., Istio, Linkerd) injects sidecar proxies alongside each service that intercept all network traffic. It provides mutual TLS (mTLS) for encryption and authentication, traffic management (retries, circuit breaking, load balancing), and telemetry — all without modifying application code."
+  },
+  {
+    "id": "h049",
+    "question": "What is the Memento pattern?",
+    "options": {
+      "A": "A pattern for caching method return values to avoid recomputation",
+      "B": "A pattern that captures and externalizes an object's internal state so it can be restored later, without violating encapsulation",
+      "C": "A pattern for logging all state changes to an audit table",
+      "D": "A pattern that creates a snapshot of the database for rollback"
+    },
+    "correct": "B",
+    "hint": "Undo/redo in a text editor is the canonical example.",
+    "explanation": "The Memento pattern captures an object's state in a memento object. The originator creates mementos and restores from them. The caretaker stores mementos without inspecting them, preserving encapsulation. This enables undo/redo functionality without exposing internal state."
+  },
+  {
+    "id": "h050",
+    "question": "In C#, what is the difference between `in`, `out`, and `ref` parameter modifiers?",
+    "options": {
+      "A": "ref passes by value; out and in pass by reference",
+      "B": "ref passes a reference that can be read and written; out passes a reference that must be written; in passes a read-only reference",
+      "C": "They are identical — all three pass by reference",
+      "D": "in is for input parameters; out is for output; ref is for both, but only for value types"
+    },
+    "correct": "B",
+    "hint": "in = read-only reference (avoids copy); out = write-only (must assign); ref = read+write.",
+    "explanation": "ref: the caller must initialize the variable; callee can read and write it. out: the callee must assign a value before returning; caller need not initialize. in: the callee receives a read-only alias — no copying of large structs, but the callee cannot modify it."
+  },
+  {
+    "id": "h051",
+    "question": "In SQL Server, what is `TempDB` used for and why is it a potential bottleneck?",
+    "options": {
+      "A": "A backup database created automatically for disaster recovery",
+      "B": "A system database used for temporary tables, table variables, internal sort/hash spills, row versioning, and worktables — contended by all sessions simultaneously",
+      "C": "A cache for frequently accessed data from user databases",
+      "D": "A staging area for bulk insert operations only"
+    },
+    "correct": "B",
+    "hint": "All user sessions share one TempDB — allocation contention on system pages is a classic bottleneck.",
+    "explanation": "TempDB is a shared system database that stores temporary tables (#temp), table variables (@table), internal sort and hash spills, row version stores (for snapshot isolation), and worktables. Because all sessions share TempDB, heavy workloads cause allocation contention on system pages (PFS, GAM, SGAM), making TempDB a classic performance bottleneck."
+  },
+  {
+    "id": "h052",
+    "question": "What does the `[GeneratedRegex]` attribute (C# 7 / .NET 7+) provide?",
+    "options": {
+      "A": "It marks a regex string for validation at compile time without changing runtime behavior",
+      "B": "It generates a compiled regex as source code at compile time, avoiding runtime compilation overhead and enabling AOT compatibility",
+      "C": "It replaces Regex.Match with a vectorized SIMD implementation",
+      "D": "It caches the compiled regex in a static field automatically"
+    },
+    "correct": "B",
+    "hint": "Prefer it over new Regex(..., RegexOptions.Compiled) in modern .NET.",
+    "explanation": "[GeneratedRegex] is a C# source generator attribute that emits optimized regex matching code at compile time. Unlike Regex.Compiled (which compiles at first use at runtime), GeneratedRegex has zero first-use overhead, works with AOT/NativeAOT, and produces debuggable, inspectable source code."
+  },
+  {
+    "id": "h053",
+    "question": "In a .NET gRPC service using Protobuf, what is the role of `.proto` files?",
+    "options": {
+      "A": "Configuration files for setting gRPC server options like port and TLS",
+      "B": "Schema definitions that describe service contracts and message types, used to generate strongly-typed client and server code",
+      "C": "Log files generated by the Protobuf serializer at runtime",
+      "D": "Protobuf runtime assemblies packaged for NuGet distribution"
+    },
+    "correct": "B",
+    "hint": "The .proto file is the contract — the protoc compiler generates C# classes from it.",
+    "explanation": ".proto files define the gRPC service interface (RPC methods) and Protobuf message types. The protoc compiler (or Grpc.Tools in .NET) generates strongly-typed C# classes for messages and both client stub and server base classes, ensuring language-agnostic, versioned API contracts."
+  },
+  {
+    "id": "h054",
+    "question": "What is parameter sniffing in SQL Server and when does it cause problems?",
+    "options": {
+      "A": "SQL Server inspecting queries for SQL injection patterns before execution",
+      "B": "SQL Server compiling a plan using the first execution's parameter values; that plan may be suboptimal for subsequent calls with very different values",
+      "C": "The optimizer choosing indexes based on column statistics histograms",
+      "D": "A feature that logs all parameter values passed to stored procedures"
+    },
+    "correct": "B",
+    "hint": "Classic symptom: the procedure is fast when run directly but slow when called from the app.",
+    "explanation": "Parameter sniffing means SQL Server compiles a plan optimized for the parameter values used during compilation (first call or after recompile). If subsequent calls use very different values (e.g., 1 row vs 1,000,000 rows), the cached plan may be highly suboptimal. Mitigations: OPTION (RECOMPILE), OPTIMIZE FOR, or local variable workarounds."
+  },
+  {
+    "id": "h055",
+    "question": "What does the `IHostApplicationLifetime` interface provide in ASP.NET Core?",
+    "options": {
+      "A": "A way to measure the total uptime of the application",
+      "B": "Cancellation tokens for application started, stopping, and stopped events, enabling graceful shutdown hooks",
+      "C": "A mechanism to restart the application programmatically",
+      "D": "Health check integration for Kubernetes liveness probes"
+    },
+    "correct": "B",
+    "hint": "Register a callback on ApplicationStopping to drain in-flight requests before shutdown.",
+    "explanation": "IHostApplicationLifetime exposes three CancellationToken properties: ApplicationStarted (fired when startup completes), ApplicationStopping (fired when shutdown begins — ideal for graceful draining), and ApplicationStopped (fired when shutdown is complete). Hosted services use these for clean lifecycle management."
+  },
+  {
+    "id": "h056",
+    "question": "In C#, what is the difference between a `sealed class` and a `static class`?",
+    "options": {
+      "A": "Sealed classes cannot be inherited; static classes cannot be inherited and cannot be instantiated",
+      "B": "Static classes can be inherited by other static classes; sealed classes cannot",
+      "C": "Sealed classes cannot have instance members; static classes can",
+      "D": "They are identical — both prevent instantiation and inheritance"
+    },
+    "correct": "A",
+    "hint": "You can create instances of a sealed class — you just can't inherit from it.",
+    "explanation": "A sealed class prevents inheritance but can be instantiated. A static class prevents both instantiation and inheritance — it can only contain static members and is intended as a container for utility functions (e.g., Math, string extension methods)."
+  },
+  {
+    "id": "h057",
+    "question": "What does SQL Server's `FOR JSON AUTO` clause do?",
+    "options": {
+      "A": "Automatically creates a JSON column in the table",
+      "B": "Formats the query result set as a JSON array based on the query structure and column aliases",
+      "C": "Parses a JSON string column and expands it into relational rows",
+      "D": "Validates JSON syntax in a column before insertion"
+    },
+    "correct": "B",
+    "hint": "Introduced in SQL Server 2016 — eliminates the need for application-side JSON serialization.",
+    "explanation": "FOR JSON AUTO (and FOR JSON PATH) formats a SQL query result directly as a JSON array. FOR JSON AUTO infers the nesting structure from the table aliases and JOIN structure. FOR JSON PATH gives explicit control over nesting using dot notation in column aliases. Useful for REST APIs that query SQL directly."
+  },
+  {
+    "id": "h058",
+    "question": "What is the Specification pattern in domain-driven design?",
+    "options": {
+      "A": "A pattern for generating API specification documents like OpenAPI",
+      "B": "An encapsulation of business rules as composable predicate objects that can be combined with And, Or, and Not",
+      "C": "A pattern for specifying database schema migrations",
+      "D": "A pattern for defining gRPC service contracts"
+    },
+    "correct": "B",
+    "hint": "Specifications can be reused, combined, and translated to IQueryable by repositories.",
+    "explanation": "The Specification pattern encapsulates a business rule as a named, reusable predicate object. Specifications can be combined (AndSpecification, OrSpecification, NotSpecification). In DDD, repositories accept specifications and translate them to IQueryable expressions, keeping query logic out of application services."
+  },
+  {
+    "id": "h059",
+    "question": "In ASP.NET Core, what is the difference between `Authorize` policy-based and role-based authorization?",
+    "options": {
+      "A": "Role-based authorization is more flexible because roles can be composed",
+      "B": "Policy-based authorization evaluates arbitrary requirements (claims, custom logic); role-based checks membership in named roles — policies are more flexible and testable",
+      "C": "They are identical — roles are implemented as policies internally",
+      "D": "Role-based authorization requires a database; policy-based does not"
+    },
+    "correct": "B",
+    "hint": "Policy-based = AuthorizationHandler<TRequirement>; role-based = [Authorize(Roles = \"Admin\")].",
+    "explanation": "Role-based authorization ([Authorize(Roles = 'Admin')]) checks if the user has the specified role claim. Policy-based authorization defines reusable policies with custom requirements and handlers, supporting complex logic like minimum age checks, resource-based authorization, or multi-claim requirements. Policies are more flexible, testable, and recommended for new applications."
+  },
+  {
+    "id": "h060",
+    "question": "What is the purpose of `IOptions<T>` vs `IOptionsSnapshot<T>` vs `IOptionsMonitor<T>` in ASP.NET Core?",
+    "options": {
+      "A": "They are identical — only the naming convention differs",
+      "B": "IOptions<T> is a singleton (not updated); IOptionsSnapshot<T> is scoped (per-request refresh); IOptionsMonitor<T> is singleton with change notifications for hot reload",
+      "C": "IOptions<T> supports hot reload; IOptionsMonitor<T> requires restart",
+      "D": "IOptionsSnapshot<T> is for appsettings only; IOptionsMonitor<T> is for environment variables"
+    },
+    "correct": "B",
+    "hint": "Need per-request fresh config? Use Snapshot. Need change callbacks? Use Monitor.",
+    "explanation": "IOptions<T> is a singleton — values are set once at startup and never refreshed. IOptionsSnapshot<T> is scoped — it re-reads configuration per HTTP request, picking up changes from providers like appsettings (on file change). IOptionsMonitor<T> is a singleton that provides the current value and supports OnChange callbacks for immediate hot reload."
+  }
 ]

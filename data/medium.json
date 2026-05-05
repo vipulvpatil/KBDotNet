@@ -1,62 +1,482 @@
 [
-  {"id":"m001","question":"What is the key difference between IEnumerable<T> and IQueryable<T>?","options":{"A":"IEnumerable<T> only works with in-memory data; IQueryable<T> doesn't support LINQ","B":"IQueryable<T> builds an expression tree that providers (e.g., EF Core) translate to SQL for server-side filtering; IEnumerable<T> evaluates in-memory","C":"IQueryable<T> is faster for all scenarios including in-memory collections","D":"There is no difference — they are interchangeable in EF Core"},"correct":"B","hint":"One pulls all rows into RAM, then filters; the other sends the filter to the database.","explanation":"IQueryable<T> holds an expression tree. EF Core translates it to SQL — so .Where() runs on the server. IEnumerable<T> forces materialisation first; all rows load into memory before filtering. Accidentally using IEnumerable<T> on a DbSet<T> causes a full table scan."},
-  {"id":"m002","question":"What does ConfigureAwait(false) do?","options":{"A":"Disables async behavior making the code synchronous","B":"Tells the awaiter not to capture and restore the current SynchronizationContext on continuation","C":"Forces the continuation to always post to the ThreadPool","D":"Configures a timeout for the awaited task"},"correct":"B","hint":"Critical in library code to avoid deadlocks when callers use .Result or .Wait() on UI or ASP.NET Classic threads.","explanation":"By default, 'await' captures the current SynchronizationContext and resumes there. ConfigureAwait(false) skips this — the continuation runs on any available thread. Library code should always use it to avoid deadlocks and remove dependency on the calling context."},
-  {"id":"m003","question":"What does .AsNoTracking() do in EF Core?","options":{"A":"Returns entities without adding them to the change tracker, improving read-only query performance","B":"Prevents EF Core from executing the query until explicitly triggered","C":"Disables lazy loading for navigation properties","D":"The default behavior is already no-tracking for all queries"},"correct":"A","hint":"The change tracker has overhead — skip it for queries where you won't call SaveChanges().","explanation":".AsNoTracking() tells EF Core not to register entities in the DbContext's change tracker. This improves memory and CPU performance for read-only queries. Without it, EF Core snapshots entity state for change detection. For read-only scenarios, always use .AsNoTracking()."},
-  {"id":"m004","question":"What is the N+1 query problem in EF Core?","options":{"A":"EF Core executes N+1 queries when a table has more than N rows","B":"Lazily loading a collection property triggers one extra query per parent entity instead of a single JOIN","C":"A deadlock caused by N+1 concurrent database connections","D":"A migration issue when tables have more than N+1 foreign keys"},"correct":"B","hint":"Loading 10 orders, then accessing order.Items for each — that's 1 + 10 = 11 queries instead of 1 JOIN.","explanation":"If you load N entities and then access a lazy-loaded navigation property on each, EF Core fires one extra query per entity = N+1 total queries. Fix it with .Include(x => x.Navigation) for eager loading, or use .AsSplitQuery() for complex includes."},
-  {"id":"m005","question":"What is async void in C# and why is it dangerous?","options":{"A":"It prevents the method from returning a result — no different from async Task","B":"Exceptions thrown inside async void cannot be caught by the caller and will crash the process","C":"async void methods run synchronously, ignoring the async state machine","D":"It is equivalent to fire-and-forget with a CancellationToken"},"correct":"B","hint":"You can't await an async void method, so exceptions are unobservable to the caller.","explanation":"async void methods cannot be awaited. If an exception is thrown, it's raised on the SynchronizationContext that was captured at the call site — often crashing the process or being swallowed. Only use async void for event handlers where the signature is void. Prefer async Task for everything else."},
-  {"id":"m006","question":"What is ValueTask<T> and when should you prefer it over Task<T>?","options":{"A":"ValueTask<T> always completes synchronously — use it for CPU-bound work","B":"ValueTask<T> is a struct that avoids a heap allocation when the result is available synchronously; use it in hot paths where the fast path is common","C":"ValueTask<T> has higher throughput than Task<T> in all scenarios","D":"ValueTask<T> supports cancellation while Task<T> does not"},"correct":"B","hint":"It's a struct — so no heap allocation when the result is already available. Useful for cache lookups, etc.","explanation":"ValueTask<T> is a struct that can represent either a synchronous result or an asynchronous operation. When the result is already available (e.g., cache hit), no heap allocation occurs. Avoid it for operations that are almost always asynchronous — the overhead of checking the state can exceed Task's allocation cost."},
-  {"id":"m007","question":"What is CancellationToken and how should it be used?","options":{"A":"A timeout mechanism that automatically cancels a task after a fixed duration","B":"A struct passed through async call chains, allowing cooperative cancellation between caller and callee","C":"A thread-safe boolean flag that terminates tasks forcefully","D":"An exception type thrown when a Task is cancelled"},"correct":"B","hint":"The caller creates a CancellationTokenSource; derived tokens are passed into methods which should check .IsCancellationRequested or call .ThrowIfCancellationRequested().","explanation":"CancellationToken enables cooperative cancellation. The caller creates a CancellationTokenSource and passes source.Token into async methods. The callee periodically checks token.IsCancellationRequested or calls token.ThrowIfCancellationRequested(). On cancellation, an OperationCanceledException is thrown."},
-  {"id":"m008","question":"What is SemaphoreSlim and when do you use it in async code?","options":{"A":"A lock primitive that works identically to 'lock{}' but for async methods","B":"A lightweight semaphore that supports async waiting (WaitAsync) to limit concurrent access to a resource","C":"An async-safe replacement for Mutex across multiple processes","D":"A rate limiter that queues excess requests and replays them later"},"correct":"B","hint":"Use it when you need to limit how many coroutines can execute a section concurrently — e.g., max 5 concurrent HTTP requests.","explanation":"'lock{}' cannot be used across await points. SemaphoreSlim.WaitAsync() is the async-safe equivalent that limits concurrency. WaitAsync() returns a Task and doesn't block the thread. Always release in a finally block. Can also be used as an async mutex (initial count = 1)."},
-  {"id":"m009","question":"What is the Single Responsibility Principle (SRP)?","options":{"A":"A class should have at most one public method","B":"A class should have only one reason to change — one cohesive responsibility","C":"Every method should perform exactly one operation","D":"A service should register only one interface in the DI container"},"correct":"B","hint":"'Reason to change' is the key — if two different stakeholders can independently demand changes to the same class, it likely violates SRP.","explanation":"SRP (from SOLID) states that a class should have only one reason to change — it should be responsible to one actor/stakeholder. A class doing both business logic and email sending violates SRP because changes to email templates and business rules are driven by different teams."},
-  {"id":"m010","question":"What is the Open/Closed Principle (OCP)?","options":{"A":"Classes should be open for use but closed from external modification via access modifiers","B":"Software entities should be open for extension but closed for modification","C":"Methods should be open to all parameter types but closed to return type changes","D":"Interfaces should be open for new members but closed for removing existing ones"},"correct":"B","hint":"Add new behavior by adding new code (new classes/implementations), not by modifying existing code.","explanation":"OCP states: extend a module's behavior without modifying its source code. Typically achieved via polymorphism — new behavior is added by implementing a new class/strategy rather than adding an if/else to an existing class. This makes code stable and prevents regressions."},
-  {"id":"m011","question":"What is the Liskov Substitution Principle (LSP)?","options":{"A":"Subclasses should implement at least the same methods as their parent class","B":"Objects of a derived class must be substitutable for objects of the base class without breaking program correctness","C":"A derived class can remove or weaken contracts defined by the base class","D":"LSP only applies to interface implementations, not class inheritance"},"correct":"B","hint":"Classic violation: Square extends Rectangle and overrides SetWidth to also set height — code that sets width and height independently breaks.","explanation":"LSP requires that derived types honor the behavioral contract of their base type. Preconditions cannot be strengthened, postconditions cannot be weakened, and invariants must be maintained. Violations break polymorphism — code using the base type fails when given the derived type."},
-  {"id":"m012","question":"What is the Repository pattern?","options":{"A":"A pattern that caches database queries in memory","B":"An abstraction layer over data access that provides a collection-like interface to query and persist domain objects","C":"A pattern that auto-generates CRUD endpoints from a model class","D":"A strategy for distributing data access across multiple databases"},"correct":"B","hint":"It hides EF Core (or any ORM/SQL) behind an interface — business logic talks to IUserRepository, not DbContext.","explanation":"The Repository pattern abstracts data access behind an interface (e.g., IOrderRepository). Business logic depends on the abstraction, not on EF Core or SQL directly. This enables testing (swap with an in-memory implementation), flexibility (swap ORM), and separation of concerns."},
-  {"id":"m013","question":"What is the Mediator pattern and what problem does it solve?","options":{"A":"It translates between incompatible interfaces","B":"It centralizes communication between objects so they don't reference each other directly, reducing coupling","C":"It caches results from expensive operations","D":"It proxies all database calls through a single entry point"},"correct":"B","hint":"MediatR is the popular .NET implementation — commands and queries are dispatched through a central mediator instead of direct service-to-service calls.","explanation":"The Mediator pattern introduces a mediator object that all components communicate through, eliminating direct dependencies. In .NET, MediatR implements this via IRequest/IRequestHandler. It's commonly paired with CQRS to dispatch commands and queries without direct handler coupling."},
-  {"id":"m014","question":"What is CQRS (Command Query Responsibility Segregation)?","options":{"A":"A pattern that separates read (Query) and write (Command) models into distinct code paths","B":"A database design that uses separate tables for inserts and selects","C":"A microservices pattern requiring two separate databases per service","D":"A REST convention distinguishing GET from POST endpoints"},"correct":"A","hint":"Commands mutate state and return void/result; Queries return data without side effects.","explanation":"CQRS separates the write model (Commands — intent to change state) from the read model (Queries — data retrieval). This allows each side to be optimized independently: Commands enforce domain invariants; Queries can use denormalized read models, different databases, or caching."},
-  {"id":"m015","question":"What is the IDisposable Dispose pattern with GC.SuppressFinalize?","options":{"A":"Calling GC.SuppressFinalize tells the GC to never collect the object","B":"The full dispose pattern: Dispose() calls Dispose(true) and GC.SuppressFinalize(this), preventing the finalizer from running redundantly when already cleaned up","C":"GC.SuppressFinalize is only needed for value types","D":"The dispose pattern only applies to classes with unmanaged resources"},"correct":"B","hint":"The finalizer is a safety net — but if Dispose() already ran, you don't want to pay for finalization too.","explanation":"The full dispose pattern: public Dispose() calls Dispose(true) (cleans both managed and unmanaged resources) and GC.SuppressFinalize(this). The finalizer ~MyClass() calls Dispose(false) (unmanaged only) as a safety net. SuppressFinalize avoids the finalization queue overhead when Dispose was already called."},
-  {"id":"m016","question":"What is the Large Object Heap (LOH) in .NET?","options":{"A":"A heap segment for objects larger than 85,000 bytes that is not compacted by default and is collected less frequently","B":"A separate process memory region for storing static objects","C":"A heap reserved for long-lived singleton objects","D":"A virtualized memory region for 64-bit pointers"},"correct":"A","hint":"Large arrays are often the culprit — they go straight to Gen 2 and cause fragmentation if not reused.","explanation":"Objects ≥85,000 bytes are allocated on the LOH. It's only collected during Gen 2 GCs (expensive) and by default is NOT compacted — leading to fragmentation over time. Use ArrayPool<T> or Memory<T> to reuse large buffers instead of repeatedly allocating/freeing them."},
-  {"id":"m017","question":"What is ArrayPool<T> and why should you use it?","options":{"A":"A thread-safe array that allows concurrent modifications","B":"A pool of reusable arrays that reduces GC pressure by renting and returning buffers instead of allocating new ones","C":"A factory for creating fixed-size arrays on the stack","D":"A wrapper around T[] that adds bounds checking"},"correct":"B","hint":"Instead of 'new byte[4096]' in a hot path, rent from the pool and return it when done.","explanation":"ArrayPool<T>.Shared.Rent(minLength) returns a pooled array (possibly larger than requested). ArrayPool<T>.Shared.Return(array) returns it to the pool. This avoids GC pressure from large, short-lived allocations — especially important for byte[] buffers in network/file I/O code."},
-  {"id":"m018","question":"What is the difference between Task.WhenAll() and Task.WhenAny()?","options":{"A":"WhenAll is sequential; WhenAny is parallel","B":"WhenAll completes when ALL tasks finish; WhenAny completes when the FIRST task finishes","C":"WhenAny waits for all tasks but returns only the last result","D":"They are equivalent — WhenAll is just more efficient for large sets"},"correct":"B","hint":"WhenAll = aggregate all results. WhenAny = race — first one wins.","explanation":"Task.WhenAll(t1, t2, t3) returns a Task that completes when all input tasks finish. Task.WhenAny(t1, t2, t3) returns a Task<Task> that completes as soon as the first task finishes. WhenAny is useful for timeouts: await Task.WhenAny(operation, Task.Delay(timeout))."},
-  {"id":"m019","question":"What is ConcurrentDictionary<TKey, TValue> and when should you use it?","options":{"A":"A dictionary that sorts keys concurrently using multiple threads","B":"A thread-safe dictionary supporting concurrent reads and fine-grained locking for writes","C":"A dictionary backed by Redis for distributed cache scenarios","D":"A read-only snapshot dictionary created from an existing Dictionary"},"correct":"B","hint":"Regular Dictionary<K,V> is not thread-safe — concurrent reads are fine but any concurrent write can corrupt it.","explanation":"ConcurrentDictionary uses fine-grained locking (striped locks) for thread-safe concurrent access without locking the entire dictionary. Key methods: TryAdd, TryGetValue, TryRemove, GetOrAdd, AddOrUpdate. For purely read-heavy scenarios, an immutable dictionary or read-write lock may be more efficient."},
-  {"id":"m020","question":"What is a deadlock in async C# code and how does it occur?","options":{"A":"Two threads waiting on each other's locks indefinitely","B":"Calling .Result or .Wait() on an async Task in a context with a single-threaded SynchronizationContext (e.g., UI thread or ASP.NET Classic)","C":"An infinite loop caused by recursive async calls","D":"A Task that never completes because ConfigureAwait(false) was not used on the awaited path"},"correct":"B","hint":"The UI thread calls .Result on a Task; the async continuation needs the UI thread to resume — deadlock.","explanation":"In single-threaded sync contexts (WPF UI, ASP.NET Classic), await captures the context and tries to resume on it. If the calling thread blocks with .Result/.Wait(), it occupies that context — the continuation can never run. Fix: use async all the way, or ConfigureAwait(false) on every await in the library."},
-  {"id":"m021","question":"What is HttpClientFactory and why should you use it instead of creating HttpClient directly?","options":{"A":"HttpClientFactory is a singleton that prevents creating more than one HTTP connection","B":"It manages HttpClient lifetimes, avoiding socket exhaustion from disposal, and enables configuring named/typed clients with policies","C":"It automatically adds authentication headers to all outgoing requests","D":"It is required for making HTTPS requests in .NET 6+"},"correct":"B","hint":"'new HttpClient()' inside using{} exhausts sockets. HttpClientFactory rotates handlers correctly.","explanation":"Creating and disposing HttpClient frequently exhausts socket connections (TIME_WAIT state) due to DNS caching issues. HttpClientFactory manages a pool of HttpMessageHandlers with controlled lifetimes, solves DNS refresh, and integrates with Polly for retry/circuit-breaker policies via AddHttpClient()."},
-  {"id":"m022","question":"What is the circuit breaker pattern?","options":{"A":"A pattern that limits the number of concurrent HTTP connections","B":"A resilience pattern that trips (opens) after a configured failure threshold, preventing calls to a failing dependency until a recovery window passes","C":"A security pattern that blocks unauthorized API requests","D":"A caching pattern that serves stale data when the source is unavailable"},"correct":"B","hint":"Like an electrical circuit breaker — it stops the flow to protect the system, then probes to see if recovery has occurred.","explanation":"The circuit breaker pattern wraps calls to a dependency. After N failures, it 'opens' and immediately fails further calls (fast-fail) for a recovery period, preventing cascading failures. After the window, it enters 'half-open' state and allows probe requests. Polly's AddPolicyHandler implements this in .NET."},
-  {"id":"m023","question":"What is the Repository pattern's key advantage in unit testing?","options":{"A":"It automatically generates test data","B":"It allows replacing the real database-backed repository with an in-memory fake, making tests faster and isolated","C":"It prevents SQL injection in tests","D":"It enables testing database migrations in isolation"},"correct":"B","hint":"Business logic depends on IRepository, not on EF Core — so tests can inject a FakeRepository or mock.","explanation":"When business logic depends on IUserRepository (an interface) via DI, tests can inject an in-memory implementation or a mock (via Moq). No real database is needed. This makes unit tests fast, deterministic, and parallelizable — tests don't depend on database state."},
-  {"id":"m024","question":"What is JWT (JSON Web Token) and how does it work?","options":{"A":"A binary protocol for transmitting authentication data between services","B":"A signed, self-contained token consisting of header.payload.signature that carries claims without requiring server-side session state","C":"A session cookie format for ASP.NET Core applications","D":"An encrypted blob used to store API keys"},"correct":"B","hint":"Three base64-encoded parts separated by dots — the signature ensures integrity without a database lookup.","explanation":"JWT consists of a base64url header (algorithm), payload (claims like userId, roles, expiry), and signature (HMAC or RSA over header.payload). The server validates the signature and trusts the claims — no session store needed. Claims-based identity in ASP.NET Core reads these claims via HttpContext.User."},
-  {"id":"m025","question":"What is claims-based identity in ASP.NET Core?","options":{"A":"A way to store user data in the appsettings.json file","B":"An identity model where a principal holds a set of claims (key-value pairs like Name, Role, Email) that represent facts about the user","C":"A database table storing user permissions","D":"A custom middleware that replaces the built-in authentication system"},"correct":"B","hint":"HttpContext.User.Claims is the list — populated from JWT, cookies, or other auth handlers.","explanation":"In ASP.NET Core, an authenticated user is represented as a ClaimsPrincipal containing ClaimsIdentities. Each ClaimsIdentity has a list of Claims (type/value pairs). Claims come from the authentication token (JWT, cookie). [Authorize(Policy = \"Admin\")] policies can be defined to check specific claims."},
-  {"id":"m026","question":"What is an action filter in ASP.NET Core?","options":{"A":"A middleware component that filters requests before they reach any controller","B":"Code that runs before and/or after a controller action executes — used for cross-cutting concerns like logging, validation, caching","C":"A mechanism for filtering the JSON output of an action","D":"A firewall rule for blocking specific HTTP verbs"},"correct":"B","hint":"Implement IActionFilter or IAsyncActionFilter and decorate your actions/controllers with it.","explanation":"Action filters implement IActionFilter (OnActionExecuting/OnActionExecuted) and execute around controller action invocation. They're used for logging, authorization, caching, model validation, etc. They differ from middleware in that they have access to the controller context and action arguments."},
-  {"id":"m027","question":"What is model binding in ASP.NET Core?","options":{"A":"The process of compiling Razor views into C# classes","B":"Automatically mapping HTTP request data (route values, query strings, body) to action method parameters and models","C":"Binding a ViewModel to a database model via EF Core","D":"A pattern for connecting UI data to backing store properties"},"correct":"B","hint":"When a request arrives, ASP.NET Core reads route, query string, headers, and body to populate your action parameters automatically.","explanation":"Model binding inspects the action's parameter types and automatically populates them from the request: route values ([FromRoute]), query string ([FromQuery]), body ([FromBody]), form data ([FromForm]), or headers ([FromHeader]). [ApiController] automatically returns 400 for binding failures."},
-  {"id":"m028","question":"What is the difference between .Find() and .FirstOrDefault() in EF Core?","options":{"A":"They are identical — both hit the database every time","B":".Find() checks the DbContext's local cache first; .FirstOrDefault() always queries the database","C":".FirstOrDefault() is faster because it uses primary key lookup","D":".Find() only works with string keys; .FirstOrDefault() works with any type"},"correct":"B","hint":".Find() is optimized — if the entity is already tracked, it returns the in-memory version without a DB round-trip.","explanation":"dbContext.Set<T>().Find(id) first checks the change tracker's identity map — if the entity is already loaded, it returns it immediately without a query. If not found locally, it queries the database. FirstOrDefault(x => x.Id == id) always generates a SQL query."},
-  {"id":"m029","question":"What is optimistic concurrency in EF Core?","options":{"A":"Locking a database row when reading it so no other process can modify it until you're done","B":"A strategy where conflicts are detected at save time using a row version/timestamp, and the update is rejected if another user changed the row in the meantime","C":"A setting that speeds up queries by skipping conflict checks","D":"Allowing multiple writes to the same row simultaneously and merging the results"},"correct":"B","hint":"EF Core sends 'WHERE Id = @id AND RowVersion = @original' — if the row was changed, 0 rows update, and a DbUpdateConcurrencyException is thrown.","explanation":"Optimistic concurrency assumes conflicts are rare and doesn't lock rows. A concurrency token (RowVersion, xmin, or a timestamp property marked with [ConcurrencyCheck]) is included in the WHERE clause of UPDATE/DELETE. If the row was changed by another process, the update affects 0 rows — EF Core throws DbUpdateConcurrencyException for the application to handle."},
-  {"id":"m030","question":"What is Include() in EF Core and what problem does it solve?","options":{"A":"It adds a new entity to the DbContext before saving","B":"It eagerly loads related navigation properties in the same query, preventing the N+1 problem","C":"It includes additional columns in a query result","D":"It joins a second DbContext's data with the current one"},"correct":"B","hint":"Without Include(), accessing order.Items triggers a lazy load query per order — N+1 queries.","explanation":".Include(x => x.Items) instructs EF Core to load the related navigation property in the same SQL query (usually a JOIN or split query). Without it, navigation properties either require lazy loading (N+1) or throw a NullReferenceException if lazy loading is disabled."},
-  {"id":"m031","question":"What are the three loading strategies in EF Core?","options":{"A":"Fast, Slow, and Cached","B":"Eager (Include), Lazy (proxy-based automatic load), and Explicit (Load() called manually)","C":"Parallel, Sequential, and Batched","D":"Synchronous, Asynchronous, and Background"},"correct":"B","hint":"Eager = JOIN in the query. Lazy = auto-load on property access. Explicit = you call .Load() when ready.","explanation":"Eager loading uses .Include() — loads related data in the initial query. Lazy loading (requires Microsoft.EntityFrameworkCore.Proxies) loads navigation properties on first access via generated proxy classes. Explicit loading uses entry.Collection(x => x.Items).Load() — you control when the extra query fires."},
-  {"id":"m032","question":"What is IHostedService in ASP.NET Core?","options":{"A":"A service that provides the host URL and port configuration","B":"An interface for implementing long-running background work that starts with the application and stops on shutdown","C":"The base class for all ASP.NET Core controllers","D":"A service that monitors the health of the application host"},"correct":"B","hint":"Implement StartAsync and StopAsync to run work alongside the web server lifecycle.","explanation":"IHostedService has StartAsync(CancellationToken) and StopAsync(CancellationToken). BackgroundService is an abstract base class that simplifies this with an ExecuteAsync override. Common uses: message consumers, scheduled jobs, event processors. Registered via services.AddHostedService<T>()."},
-  {"id":"m033","question":"What is the Strategy pattern?","options":{"A":"A pattern that maps routes to controller actions","B":"A behavioral pattern that defines a family of algorithms, encapsulates each one, and makes them interchangeable at runtime","C":"A pattern for choosing which database to query","D":"A pattern for selecting the best caching strategy based on load"},"correct":"B","hint":"Instead of if/else selecting an algorithm, inject the algorithm as an interface — swap the implementation without changing the caller.","explanation":"The Strategy pattern encapsulates algorithms behind a common interface. The context holds a reference to a strategy and delegates behavior to it. This enables selecting algorithms at runtime (e.g., different sorting strategies, pricing rules, export formats) without modifying the context class."},
-  {"id":"m034","question":"What is the result of calling '.ToList()' vs iterating directly over a LINQ query?","options":{"A":"ToList() is lazy; iterating is immediate","B":"ToList() materialises the query into memory immediately; iterating enumerates lazily (deferred execution)","C":"They are identical — both execute the query at the same time","D":"ToList() executes the query twice: once to count, once to fill"},"correct":"B","hint":"LINQ is lazy — the SQL or in-memory filter only runs when you actually consume the results.","explanation":"LINQ uses deferred execution — a query is not executed until enumerated. .ToList() triggers immediate execution and loads all results into a List<T>. Iterating with foreach also triggers execution but element by element. Multiple enumerations of a non-materialised query re-execute it each time."},
-  {"id":"m035","question":"What is IMemoryCache in ASP.NET Core?","options":{"A":"A cache stored in Redis for distributed scenarios","B":"An in-process, in-memory cache scoped to the current application instance","C":"A cache of compiled Razor templates","D":"The EF Core second-level query cache"},"correct":"B","hint":"Fast, in-process, but not shared across multiple servers — use IDistributedCache for that.","explanation":"IMemoryCache provides an in-process key/value cache. It's fast (no network) but not shared across scaled-out instances. Register with services.AddMemoryCache(). Use IDistributedCache (backed by Redis, SQL, etc.) when you need a shared cache across a web farm."},
-  {"id":"m036","question":"What is the decorator pattern and how does it relate to DI in .NET?","options":{"A":"A pattern for adding attributes to classes at runtime","B":"A structural pattern that wraps an object with additional behavior — in DI, one implementation wraps another by implementing the same interface","C":"A pattern that generates code via source generators","D":"A way to add retry logic to all methods in a class using AOP"},"correct":"B","hint":"Logging decorator: LoggingOrderService implements IOrderService and wraps a real OrderService, adding log calls around its methods.","explanation":"The Decorator pattern wraps an object with the same interface, adding cross-cutting concerns (logging, caching, retry) without modifying the original class. In ASP.NET Core DI, register the inner service, then register the decorator wrapping it. Libraries like Scrutor make this declarative."},
-  {"id":"m037","question":"What is the difference between IOptions<T>, IOptionsSnapshot<T>, and IOptionsMonitor<T>?","options":{"A":"They are identical — just different names for the same service","B":"IOptions is Singleton (loaded once); IOptionsSnapshot is Scoped (reloads per request); IOptionsMonitor is Singleton with change notifications","C":"IOptionsSnapshot is for primitive values; IOptions handles complex objects","D":"IOptionsMonitor only works with Azure Key Vault"},"correct":"B","hint":"If you need hot-reload of config changes, use Monitor. If per-request config (e.g., per-tenant), use Snapshot.","explanation":"IOptions<T> is singleton — reads config once at startup. IOptionsSnapshot<T> is scoped — reads config once per request/scope, picking up file changes. IOptionsMonitor<T> is singleton with an OnChange callback — best for tracking live config changes without restarting."},
-  {"id":"m038","question":"What is a value converter in EF Core?","options":{"A":"A class that converts database query results to C# value types","B":"A component that converts a property value between its CLR representation and how it's stored in the database","C":"A migration helper that converts column data types","D":"An EF Core feature that auto-converts int to long for large tables"},"correct":"B","hint":"Example: store an enum as a string in the DB, or serialize a value object to JSON in one column.","explanation":"Value converters (HasConversion<T>()) let you map a C# type to a different database representation. Common uses: enums stored as strings, value objects serialized to JSON, Money type stored as decimal. Configured in OnModelCreating or via IEntityTypeConfiguration<T>."},
-  {"id":"m039","question":"What is the Specification pattern?","options":{"A":"A pattern for documenting API contracts in OpenAPI format","B":"A pattern that encapsulates a query/business rule as an object, composable with AND/OR/NOT logic","C":"A formal test definition format for BDD-style tests","D":"A pattern for specifying database indexes declaratively"},"correct":"B","hint":"UserIsActive AND UserIsAdult — each rule is an object; they compose together. Ardalis.Specification is a popular library.","explanation":"The Specification pattern wraps a predicate (business rule) in an object with an IsSatisfiedBy(entity) method. Specifications can be combined: new ActiveUser().And(new AdminUser()). They encapsulate query logic and make it reusable and testable in isolation, separate from the repository."},
-  {"id":"m040","question":"What is the danger of using async void instead of async Task for event handlers beyond error handling?","options":{"A":"async void event handlers run synchronously","B":"The application cannot await them — background work can outlive the scope that triggered it, causing use-after-dispose errors","C":"They are completely equivalent for event handlers — there is no danger","D":"async void silently swallows all exceptions in event handlers"},"correct":"B","hint":"If the handler does async work, the caller (event raiser) considers it done immediately — the async work is untracked.","explanation":"With async void, the event raiser's 'fire and forget' means the async work continues after the raising method returns. If the scope (e.g., request) is disposed before the work completes, you'll access disposed objects. Additionally, unhandled exceptions in async void crash the process in .NET Framework and older environments."},
-  {"id":"m041","question":"What is a minimal API in ASP.NET Core 6+?","options":{"A":"A stripped-down version of ASP.NET Core with no middleware support","B":"A way to define HTTP endpoints directly in Program.cs using app.MapGet/MapPost etc., without controllers or action classes","C":"An API that accepts only JSON with a minimal payload size","D":"A microservices framework replacing full MVC"},"correct":"B","hint":"app.MapGet(\"/users\", () => ...); — no controller class required.","explanation":"Minimal APIs (introduced in .NET 6) let you define routes and handlers inline in Program.cs: app.MapGet(\"/items/{id}\", (int id, IService svc) => svc.GetItem(id)). Dependencies are injected automatically from DI. Great for small services; for complex applications, controllers still offer more structure."},
-  {"id":"m042","question":"What is the difference between Unit Test, Integration Test, and End-to-End (E2E) test?","options":{"A":"They test the same code at different speeds","B":"Unit tests test a class in isolation with mocks; integration tests test multiple real components together; E2E tests verify the full system including UI and external services","C":"Unit tests are manual; integration and E2E tests are automated","D":"Integration tests use a production database; unit and E2E tests use mocks"},"correct":"B","hint":"The testing pyramid: many unit tests (fast, isolated), fewer integration tests, fewest E2E tests (slow, realistic).","explanation":"Unit tests test a single class in isolation — dependencies are mocked. Integration tests verify that multiple components work together (e.g., EF Core + real database, HttpClient + real API). E2E tests drive the full stack (browser, API, database). Higher-level tests catch more real bugs but are slower and flakier."},
-  {"id":"m043","question":"What is WebApplicationFactory in ASP.NET Core testing?","options":{"A":"A factory that generates API client code from OpenAPI specs","B":"A test utility that boots the real ASP.NET Core pipeline in-process for integration tests","C":"A mock that simulates HttpContext for unit tests","D":"The factory class used in Program.cs to configure the web host"},"correct":"B","hint":"TestServer runs your real middleware stack without HTTP overhead — tests call the API directly in-process.","explanation":"WebApplicationFactory<TProgram> spins up a real ASP.NET Core application in memory using TestServer. Tests use an HttpClient that sends requests through the real middleware pipeline — real DI, real middleware, real routing — but without network I/O. You can override services with test doubles for isolation."},
-  {"id":"m044","question":"What is the Arrange-Act-Assert (AAA) pattern in unit tests?","options":{"A":"A database design pattern for ordering query steps","B":"A test structure: set up dependencies (Arrange), execute the code under test (Act), verify the outcome (Assert)","C":"An acronym for Automated Acceptance and Approval testing","D":"A pattern for ordering middleware in ASP.NET Core"},"correct":"B","hint":"It makes test intent clear — any developer can see what's being set up, what's being tested, and what's expected.","explanation":"AAA divides a test into three sections: Arrange (set up objects, mocks, and input data), Act (call the method under test), Assert (verify the result or side effects). This structure makes tests readable and focused on one behavior. A test violating AAA (multiple Acts) often indicates it's testing too much."},
-  {"id":"m045","question":"What is string interning in .NET?","options":{"A":"Encoding a string as UTF-8 bytes for storage","B":"A mechanism where identical string literals share the same memory reference — string.Intern() manually adds a string to the intern pool","C":"A JIT optimization that stores frequently used strings on the stack","D":"The process of compressing strings using LZ4 within the CLR"},"correct":"B","hint":"'hello' == 'hello' as references (not just value equality) for interned strings — they literally point to the same object.","explanation":"String literals in .NET are automatically interned — 'hello' declared in two places points to the same object. string.Intern(s) adds a runtime string to the pool. Useful if you're comparing millions of short strings by reference (Object.ReferenceEquals) for performance, but the intern pool is never GC'd."},
-  {"id":"m046","question":"What is a record struct vs record class in C#?","options":{"A":"They are identical — records always use reference semantics","B":"record struct is a value type with value equality and immutability; record class is a reference type with value equality","C":"record struct supports inheritance; record class does not","D":"record class is sealed; record struct can be inherited"},"correct":"B","hint":"record = reference type with value equality. record struct = value type with value equality.","explanation":"'record class' (or just 'record') is a reference type where == and Equals() compare property values. 'record struct' is a value type with the same value equality semantics plus the 'with' expression for non-destructive mutation. Both get auto-generated equality, GetHashCode, and ToString."},
-  {"id":"m047","question":"What are init-only setters in C# 9?","options":{"A":"Properties that can only be set in the class constructor","B":"Properties settable during object initialization syntax but immutable afterwards","C":"A compile-time constant evaluated during initialization","D":"Auto-properties that throw if set to null"},"correct":"B","hint":"They enable immutable objects with object initializer syntax: new Person { Name = \"Alice\" } — but person.Name = \"Bob\" later is a compile error.","explanation":"'init' replaces 'set' in a property accessor. The property can be assigned in 'new MyClass { Prop = value }' syntax or a constructor, but not afterwards. This enables immutable value objects and records while preserving the convenient object initializer syntax."},
-  {"id":"m048","question":"What is a local function in C# and how does it differ from a lambda?","options":{"A":"A function defined inside a method that can be recursive, supports attributes, and doesn't allocate a delegate object for non-capturing calls","B":"A method scoped to a single class that cannot access external variables","C":"A private static method — identical to a local function but at class scope","D":"A function that runs in a local AppDomain for isolation"},"correct":"A","hint":"Local functions can call themselves recursively (unlike lambdas without workarounds) and can have doc comments and attributes.","explanation":"Local functions are methods defined inside other methods. Non-capturing static local functions are zero-allocation. They support recursion naturally, generic type parameters, and attributes (e.g., [Conditional]). Lambdas create delegate objects (Func/Action) which allocate. For hot-path callbacks, a non-capturing local function is faster."},
-  {"id":"m049","question":"What is the .SelectMany() LINQ operator?","options":{"A":"Selects the top N elements from a sequence","B":"Flattens a sequence of sequences into a single sequence","C":"Selects multiple properties from each element","D":"Joins two sequences using a key selector"},"correct":"B","hint":"orders.SelectMany(o => o.Items) turns a list of orders into a flat list of all items across all orders.","explanation":".SelectMany(x => x.Collection) projects each element to a collection, then flattens all those collections into one. It's equivalent to a nested foreach with a yield return. In LINQ to SQL/EF Core, it typically generates a JOIN."},
-  {"id":"m050","question":"What is .Aggregate() in LINQ?","options":{"A":"Groups elements by a key and counts each group","B":"Applies an accumulator function over a sequence, combining elements one by one into a single result","C":"Calculates all aggregate functions (Sum, Min, Max) in one pass","D":"Merges two ordered sequences into one"},"correct":"B","hint":"numbers.Aggregate((acc, x) => acc + x) is a custom Sum. You provide the combining function.","explanation":".Aggregate(seed, (accumulator, element) => ...) folds a sequence into a single value. It's a generalisation of Sum, Min, Max. Example: strings.Aggregate(string.Empty, (acc, s) => acc + \", \" + s) builds a comma-separated string (though StringBuilder is more efficient)."},
-  {"id":"m051","question":"What is deferred execution in LINQ?","options":{"A":"LINQ queries are always executed on a background thread","B":"A LINQ query is not executed when defined — it executes only when the results are enumerated","C":"LINQ queries are cached and only re-executed after a timeout","D":"Deferred execution means the query runs in parallel automatically"},"correct":"B","hint":"Defining .Where(...).Select(...) doesn't hit the database — adding .ToList() or iterating with foreach does.","explanation":"LINQ queries return IEnumerable<T> or IQueryable<T> representing the query definition, not the results. Execution is deferred until enumeration (foreach, ToList(), ToArray(), First(), Count(), etc.). This allows composing queries without multiple database round-trips and enables optimisation by providers."},
-  {"id":"m052","question":"What is System.Text.Json vs Newtonsoft.Json (Json.NET)?","options":{"A":"They are identical — System.Text.Json replaced Newtonsoft.Json completely","B":"System.Text.Json is faster and lower-allocation but has stricter defaults; Newtonsoft.Json is more feature-rich with better polymorphism/custom converter support","C":"System.Text.Json supports XML; Newtonsoft.Json is JSON only","D":"Newtonsoft.Json is built-in to .NET; System.Text.Json is a third-party package"},"correct":"B","hint":"System.Text.Json is the lean built-in choice; Json.NET has richer features but is a dependency.","explanation":"System.Text.Json (built-in since .NET Core 3) is faster with fewer allocations. It's more strict (case-sensitive by default, fewer implicit conversions). Newtonsoft.Json (Json.NET) has richer support for polymorphic types, complex custom converters, LINQ to JSON, and a longer history of community support."},
-  {"id":"m053","question":"What is a source generator in .NET?","options":{"A":"A tool that generates database schemas from C# models","B":"A Roslyn-based compiler extension that generates additional C# source code during compilation based on your existing code","C":"A code snippet template system in Visual Studio","D":"A tool that generates OpenAPI documentation from controller attributes"},"correct":"B","hint":"System.Text.Json uses one to generate serializers — no reflection at runtime, faster and AOT-friendly.","explanation":"Source generators run during compilation and can inspect your code (via syntax trees and semantic model) to emit additional C# source files. They're used for: auto-implementing interfaces, generating serializers (System.Text.Json), strongly-typed IOptions, LoggerMessage patterns, etc. No runtime overhead."},
-  {"id":"m054","question":"What is the Result<T> pattern for error handling?","options":{"A":"A Task<T> wrapper that always returns a value or null","B":"A return type that explicitly represents either success (with a value) or failure (with an error), avoiding exceptions for expected errors","C":"A pattern that retries failed operations and returns the last result","D":"An EF Core feature for returning query results with metadata"},"correct":"B","hint":"Instead of throwing FileNotFoundException for a missing file, return Result.Failure(\"File not found\") — the caller is forced to handle both cases.","explanation":"Result<T> (or Either<Error, T>) avoids using exceptions for expected failure paths (not found, validation errors). The caller must check IsSuccess/IsFailure. Libraries: FluentResults, CSharpFunctionalExtensions, ErrorOr. This makes error paths explicit in the type system and avoids expensive exception allocation on happy-path-critical code."},
-  {"id":"m055","question":"What is the Dependency Inversion Principle (DIP)?","options":{"A":"Dependencies should be created as late as possible","B":"High-level modules should not depend on low-level modules — both should depend on abstractions (interfaces)","C":"Constructors should not call virtual methods","D":"Circular dependencies between assemblies must be inverted using events"},"correct":"B","hint":"OrderService should depend on IPaymentGateway (abstraction), not on StripePaymentGateway (concrete implementation).","explanation":"DIP states: high-level policy (OrderService) should not depend on implementation details (StripeGateway). Both should depend on abstractions (IPaymentGateway). This enables substitution, testability, and decoupling. It's the 'D' in SOLID and the theoretical basis for Dependency Injection."},
-  {"id":"m056","question":"What does 'lock(obj) { }' do in C# and what are its limitations?","options":{"A":"It prevents the object from being garbage collected inside the block","B":"It acquires a mutual exclusion lock on the object, ensuring only one thread executes the block at a time — but cannot be used across await points","C":"It makes all operations inside the block atomic at the hardware level","D":"It freezes the object's properties from being modified outside the block"},"correct":"B","hint":"You can't 'await' inside a lock — use SemaphoreSlim.WaitAsync() instead for async mutual exclusion.","explanation":"lock(obj) translates to Monitor.Enter(obj)/Monitor.Exit(obj) in a try/finally. It serializes access to the enclosed code. Limitations: cannot await inside a lock (the continuation may resume on a different thread which doesn't hold the lock), and nested locks can deadlock. For async code, use SemaphoreSlim(1,1)."},
-  {"id":"m057","question":"What is the Interface Segregation Principle (ISP)?","options":{"A":"Interfaces should have private implementations to prevent misuse","B":"Clients should not be forced to depend on methods they don't use — prefer many small, focused interfaces over one large one","C":"Every interface should segregate its methods into read and write groups","D":"Interfaces must be separated into different namespaces for clarity"},"correct":"B","hint":"A fat IPrinter interface with Print, Scan, Fax, Copy forces a SimplePrinter to implement Scan and Fax even though it can't do them.","explanation":"ISP states: don't force implementors to depend on methods they don't need. Break a fat interface into smaller, focused interfaces. Implementing classes choose which interfaces to implement. This reduces coupling and prevents 'NotImplementedException' in partial implementations."},
-  {"id":"m058","question":"What is BenchmarkDotNet used for?","options":{"A":"Load testing ASP.NET Core applications under concurrent request pressure","B":"Measuring the performance (throughput, latency, memory allocations) of C# code with statistical accuracy","C":"Profiling memory leaks in production .NET applications","D":"Benchmarking database query performance against EF Core"},"correct":"B","hint":"Add [Benchmark] to methods, run in Release mode — it handles warmup, iterations, and statistics.","explanation":"BenchmarkDotNet runs annotated [Benchmark] methods in a controlled, statistically rigorous manner (warmup rounds, multiple iterations, GC collection between runs). It reports mean execution time, memory allocations (with MemoryDiagnoser), and comparison between methods. Always use it in Release configuration."},
-  {"id":"m059","question":"What is the pattern matching switch expression in C# 8+?","options":{"A":"A switch statement that only matches on string patterns using regex","B":"A concise expression form of switch that matches patterns (types, values, conditions) and returns a value","C":"A pattern for routing HTTP requests in Minimal API","D":"An expression that matches XML node types in LINQ to XML"},"correct":"B","hint":"result = shape switch { Circle c => Math.PI * c.R * c.R, Rectangle r => r.W * r.H, _ => 0 };","explanation":"The switch expression (value switch { pattern => result, ... }) replaces verbose switch statements for mapping/transformation. It supports type patterns (T t), property patterns ({ Prop: value }), tuple patterns, relational patterns (> 10), and guards (when condition). The compiler warns if patterns are unreachable or non-exhaustive."},
-  {"id":"m060","question":"What is DbContext pooling in EF Core?","options":{"A":"A feature that pools database connections across DbContext instances","B":"Reusing DbContext instances (after resetting their state) instead of creating new ones per request, reducing instantiation overhead","C":"A pattern for sharing a single DbContext across all requests safely","D":"Caching frequently executed queries inside the DbContext"},"correct":"B","hint":"services.AddDbContextPool<T>() instead of AddDbContext<T>() — EF Core resets and reuses contexts.","explanation":"DbContext pooling (AddDbContextPool<T>) maintains a pool of DbContext instances. After a request ends, the context is reset (tracked entities cleared) and returned to the pool. The next request gets a pre-constructed context, avoiding the overhead of DI resolution and constructor calls. Useful in high-throughput scenarios."}
+  {
+    "id": "m1",
+    "question": "When using the Repository pattern, what is the primary benefit?",
+    "options": { "A": "It decouples data-access logic from business logic", "B": "It improves raw SQL query performance automatically", "C": "It provides automatic result caching", "D": "It enables transparent database sharding" },
+    "correct": "A",
+    "hint": "Swapping from EF Core to Dapper should not affect the domain layer.",
+    "explanation": "Repository hides data-access details behind an interface, so the business layer depends on the abstraction, not the ORM."
+  },
+  {
+    "id": "m2",
+    "question": "In C# async/await, what does `await` do when it encounters an incomplete Task?",
+    "options": { "A": "Blocks the current thread until the task finishes", "B": "Returns control to the caller and resumes after the task completes", "C": "Cancels the task and throws an exception", "D": "Creates a new thread for the task" },
+    "correct": "B",
+    "hint": "The thread is freed while waiting — that's the point.",
+    "explanation": "`await` suspends the async method and returns control to the caller. The method resumes on completion, freeing the thread in between."
+  },
+  {
+    "id": "m3",
+    "question": "In EF Core, what does the `Include()` method do?",
+    "options": { "A": "Adds a new entity to the change tracker", "B": "Runs a raw SQL command", "C": "Eagerly loads related navigation properties in the same query", "D": "Applies a global filter to the query" },
+    "correct": "C",
+    "hint": "Generates a SQL JOIN under the hood.",
+    "explanation": "`Include()` triggers eager loading — EF Core fetches related entities (e.g., `Include(o => o.Items)`) in the same database round-trip."
+  },
+  {
+    "id": "m4",
+    "question": "What is a stored procedure in SQL Server?",
+    "options": { "A": "A saved SELECT statement stored as a view", "B": "A database trigger fired on data changes", "C": "A read-only virtual table", "D": "A named, precompiled batch of SQL statements stored on the server" },
+    "correct": "D",
+    "hint": "Called with `EXEC procName`.",
+    "explanation": "Stored procedures are precompiled SQL batches stored in the database. They support parameters, transactions, and reuse."
+  },
+  {
+    "id": "m5",
+    "question": "In ASP.NET Core, what is the purpose of `IActionResult`?",
+    "options": { "A": "Represent the result of a controller action with the appropriate HTTP response type", "B": "Validate model property annotations", "C": "Handle pipeline exceptions automatically", "D": "Define attribute-based route templates" },
+    "correct": "A",
+    "hint": "Implementations include `OkResult`, `NotFoundResult`, `JsonResult`, etc.",
+    "explanation": "`IActionResult` abstracts the HTTP response, letting actions return different status codes and payloads via concrete implementations."
+  },
+  {
+    "id": "m6",
+    "question": "This microservices pattern involves each service owning and managing its own database. What is it called?",
+    "options": { "A": "Shared Database", "B": "Database per Service", "C": "CQRS", "D": "Event Sourcing" },
+    "correct": "B",
+    "hint": "Loose coupling at the data tier.",
+    "explanation": "Database per Service ensures services are independently deployable; no service accesses another's schema directly."
+  },
+  {
+    "id": "m7",
+    "question": "In C#, what is `CancellationToken` used for?",
+    "options": { "A": "Enforce a hard timeout on a method", "B": "Cancel pending database transactions", "C": "Cooperatively cancel an in-progress async operation", "D": "Abort HTTP requests automatically on timeout" },
+    "correct": "C",
+    "hint": "The callee checks `token.IsCancellationRequested`.",
+    "explanation": "`CancellationToken` enables cooperative cancellation: the caller signals, and the callee periodically checks and throws `OperationCanceledException`."
+  },
+  {
+    "id": "m8",
+    "question": "In EF Core, which method persists all tracked changes to the database?",
+    "options": { "A": "Commit()", "B": "Flush()", "C": "Apply()", "D": "SaveChangesAsync()" },
+    "correct": "D",
+    "hint": "Called on the DbContext instance.",
+    "explanation": "`SaveChanges()` / `SaveChangesAsync()` generates and executes INSERT/UPDATE/DELETE SQL for all tracked entity changes."
+  },
+  {
+    "id": "m9",
+    "question": "What does CQRS stand for?",
+    "options": { "A": "Command Query Responsibility Segregation", "B": "Common Query Resource System", "C": "Concurrent Query Response Strategy", "D": "Command Queue Request Serialization" },
+    "correct": "A",
+    "hint": "Reads and writes are handled by separate models.",
+    "explanation": "CQRS separates the write model (Commands) from the read model (Queries) so each can be optimized independently."
+  },
+  {
+    "id": "m10",
+    "question": "In SQL Server, what is a non-clustered index?",
+    "options": { "A": "An index that physically sorts the table's data rows", "B": "A separate B-tree structure that stores key values and row pointers without reordering table data", "C": "An index limited to a single column", "D": "An index defined on a view" },
+    "correct": "B",
+    "hint": "A table can have many of these.",
+    "explanation": "Non-clustered indexes store a copy of the key columns plus a pointer to the actual data row, without changing the physical row order."
+  },
+  {
+    "id": "m11",
+    "question": "In ASP.NET Core MVC, what does `ModelState.IsValid` check?",
+    "options": { "A": "Whether the entity has been saved to the database", "B": "Whether the model class compiles without errors", "C": "Whether the incoming request data satisfies all data annotation constraints", "D": "Whether the model class inherits from a base class" },
+    "correct": "C",
+    "hint": "Validates `[Required]`, `[MaxLength]`, custom attributes, etc.",
+    "explanation": "`ModelState.IsValid` is true when model binding succeeded and all data annotations pass on the bound object."
+  },
+  {
+    "id": "m12",
+    "question": "What is the Observer design pattern primarily used for?",
+    "options": { "A": "Creating objects without specifying their concrete class", "B": "Converting incompatible interfaces to a common one", "C": "Structuring complex object hierarchies", "D": "Implementing event-driven notification between objects" },
+    "correct": "D",
+    "hint": "The subject maintains a list of subscribers.",
+    "explanation": "Observer defines a one-to-many dependency: when the subject changes state, all registered observers are notified automatically."
+  },
+  {
+    "id": "m13",
+    "question": "In C#, when should you prefer `Task.Run()` over async/await without `Task.Run()`?",
+    "options": { "A": "To offload CPU-bound work to a thread pool thread so the calling thread is not blocked", "B": "They are functionally identical; `Task.Run()` is just older", "C": "`Task.Run()` is preferred for all I/O operations", "D": "`async/await` always creates new OS threads whereas `Task.Run` does not" },
+    "correct": "A",
+    "hint": "CPU-bound → `Task.Run`; I/O-bound → `await` directly.",
+    "explanation": "`Task.Run()` sends CPU-bound work to a thread pool thread. For I/O-bound work, `await` on an async API is sufficient and doesn't consume a thread."
+  },
+  {
+    "id": "m14",
+    "question": "In EF Core, what is lazy loading?",
+    "options": { "A": "Deferring the database connection until the first query", "B": "Loading related entities only when their navigation property is first accessed", "C": "Caching query results across requests", "D": "Batching multiple inserts into one round trip" },
+    "correct": "B",
+    "hint": "Requires virtual navigation properties and a proxy package.",
+    "explanation": "Lazy loading delays loading related data until accessed. It can cause N+1 query problems if not used carefully."
+  },
+  {
+    "id": "m15",
+    "question": "In microservices, what is an API Gateway?",
+    "options": { "A": "A SQL proxy that routes queries to microservice databases", "B": "A dedicated authentication service", "C": "A single entry point that routes, aggregates, and transforms client requests to appropriate services", "D": "A load balancer for databases" },
+    "correct": "C",
+    "hint": "Clients talk to one place; the gateway fans out.",
+    "explanation": "An API Gateway handles cross-cutting concerns (auth, rate limiting, routing) and shields clients from internal service topology."
+  },
+  {
+    "id": "m16",
+    "question": "What is the primary purpose of the Unit of Work pattern?",
+    "options": { "A": "Provide CRUD operations for a single entity type", "B": "Abstract the entire database layer", "C": "Cache frequently accessed entities", "D": "Group multiple operations into a single atomic transaction" },
+    "correct": "D",
+    "hint": "DbContext is EF Core's built-in Unit of Work.",
+    "explanation": "Unit of Work tracks changes across multiple repositories and commits them as one transaction, maintaining consistency."
+  },
+  {
+    "id": "m17",
+    "question": "In ASP.NET Core, what does the `[FromBody]` attribute do?",
+    "options": { "A": "Binds an action parameter from the HTTP request body (e.g., JSON payload)", "B": "Marks a parameter as required by the route", "C": "Serializes the response object to JSON", "D": "Validates the maximum size of the request body" },
+    "correct": "A",
+    "hint": "Common on POST/PUT endpoints accepting JSON.",
+    "explanation": "`[FromBody]` tells model binding to read the parameter from the request body, typically deserializing JSON."
+  },
+  {
+    "id": "m18",
+    "question": "In SQL Server, what is the key difference between TRUNCATE and DELETE?",
+    "options": { "A": "TRUNCATE supports a WHERE clause; DELETE does not", "B": "TRUNCATE is minimally logged and faster with no WHERE clause; DELETE logs each row and supports WHERE and rollback", "C": "DELETE removes the table structure; TRUNCATE removes only rows", "D": "They are functionally identical in all scenarios" },
+    "correct": "B",
+    "hint": "TRUNCATE resets the identity counter; DELETE does not.",
+    "explanation": "TRUNCATE is a DDL operation: minimally logged, no WHERE support, resets identity. DELETE is DML: row-logged, supports WHERE and can be rolled back."
+  },
+  {
+    "id": "m19",
+    "question": "What is the Decorator pattern's defining characteristic?",
+    "options": { "A": "It creates a new subclass for every combination of behavior", "B": "It chains behaviors through a single inheritance hierarchy", "C": "It wraps objects and adds behavior without modifying the wrapped class", "D": "It maintains a global registry of all decorators" },
+    "correct": "C",
+    "hint": "Implements the same interface as the component it wraps.",
+    "explanation": "Decorator composes behavior at runtime by wrapping objects, avoiding class explosion compared to subclassing every combination."
+  },
+  {
+    "id": "m20",
+    "question": "In C# generics, what is a type constraint (e.g., `where T : class`)?",
+    "options": { "A": "A naming convention for type parameters", "B": "A cap on the number of type parameters", "C": "A default value assignment for T", "D": "A restriction that limits which types can be substituted for T" },
+    "correct": "D",
+    "hint": "Examples: `where T : IDisposable`, `where T : new()`.",
+    "explanation": "Constraints restrict T to types meeting certain requirements (reference type, value type, specific interface, constructor, etc.)."
+  },
+  {
+    "id": "m21",
+    "question": "In ASP.NET Core, what is a filter?",
+    "options": { "A": "Code that runs before or after specific stages of action method processing", "B": "A LINQ extension method for result filtering", "C": "A middleware component for IP blocking", "D": "A data annotation for model validation" },
+    "correct": "A",
+    "hint": "Examples: `IActionFilter`, `IExceptionFilter`, `IAuthorizationFilter`.",
+    "explanation": "Filters intercept the request pipeline at action, result, or exception stages — allowing cross-cutting concerns like logging and auth."
+  },
+  {
+    "id": "m22",
+    "question": "What is the purpose of `ConfigureAwait(false)` in library code?",
+    "options": { "A": "Cancel an awaited operation on timeout", "B": "Prevent the continuation from being marshaled back to the original synchronization context", "C": "Configure thread pool size for the operation", "D": "Force the remainder of the method to run synchronously" },
+    "correct": "B",
+    "hint": "Avoids deadlocks in legacy sync-over-async code.",
+    "explanation": "`ConfigureAwait(false)` tells the runtime to resume on any available thread, avoiding capture of the caller's context (e.g., ASP.NET's request context)."
+  },
+  {
+    "id": "m23",
+    "question": "In EF Core, what is a navigation property?",
+    "options": { "A": "A property that stores the entity's primary key", "B": "A property accessible only inside LINQ queries", "C": "A property that represents a relationship to one or more other entities", "D": "A computed property derived from other columns" },
+    "correct": "C",
+    "hint": "e.g., `public List<OrderItem> Items { get; set; }` on an `Order`.",
+    "explanation": "Navigation properties let you traverse relationships in LINQ queries and trigger eager/lazy/explicit loading."
+  },
+  {
+    "id": "m24",
+    "question": "In SQL Server, what is a transaction?",
+    "options": { "A": "A stored procedure that returns a result set", "B": "A read-only view combining multiple tables", "C": "A scheduled database maintenance job", "D": "A unit of work where all operations succeed atomically or all are rolled back" },
+    "correct": "D",
+    "hint": "BEGIN TRAN / COMMIT / ROLLBACK.",
+    "explanation": "Transactions guarantee ACID properties — Atomicity, Consistency, Isolation, and Durability."
+  },
+  {
+    "id": "m25",
+    "question": "What does the Facade pattern achieve?",
+    "options": { "A": "Provides a unified, simplified interface to a complex subsystem", "B": "Adds cross-cutting behavior to any object without modification", "C": "Converts one interface into another expected interface", "D": "Ensures a subsystem has only one entry-point instance" },
+    "correct": "A",
+    "hint": "Hides complexity; used extensively in SDK/service layers.",
+    "explanation": "Facade wraps a complex subsystem behind a single easy-to-use class, reducing coupling for clients."
+  },
+  {
+    "id": "m26",
+    "question": "In microservices, what does the Circuit Breaker pattern do?",
+    "options": { "A": "Prevents two services from making circular calls to each other", "B": "Stops repeated calls to a failing service after a threshold, allowing recovery time", "C": "Encrypts inter-service communication", "D": "Distributes load evenly across service replicas" },
+    "correct": "B",
+    "hint": "States: Closed → Open → Half-Open.",
+    "explanation": "Circuit Breaker detects failures and short-circuits calls to a failing service, preventing cascading failures and giving it time to recover."
+  },
+  {
+    "id": "m27",
+    "question": "In C# LINQ, what does `Select()` do?",
+    "options": { "A": "Filters elements based on a predicate", "B": "Sorts elements by a key selector", "C": "Projects each element into a new form using a transform function", "D": "Groups elements by a key selector" },
+    "correct": "C",
+    "hint": "Equivalent to SQL's column list or `map` in functional languages.",
+    "explanation": "`Select(x => new { x.Id, x.Name })` maps each element to a new shape without filtering."
+  },
+  {
+    "id": "m28",
+    "question": "In ASP.NET Core, what is the purpose of `IHostedService`?",
+    "options": { "A": "Host static files from the wwwroot folder", "B": "Define a background HTTP listener port", "C": "Configure middleware registration order", "D": "Run background tasks tied to the application lifecycle (start/stop)" },
+    "correct": "D",
+    "hint": "`StartAsync` and `StopAsync` are called by the host.",
+    "explanation": "`IHostedService` enables long-running background work (e.g., queue processing) integrated with the ASP.NET Core host lifecycle."
+  },
+  {
+    "id": "m29",
+    "question": "In EF Core, what is the code-first development approach?",
+    "options": { "A": "Define C# domain classes first; EF Core generates the database schema from them", "B": "Write raw SQL first; EF maps it to classes automatically", "C": "Generate C# classes from an existing database schema", "D": "Write migrations before writing any model classes" },
+    "correct": "A",
+    "hint": "Migrations capture the difference between model and schema.",
+    "explanation": "Code-first lets developers define the data model in C#; EF Core translates it into database tables via migrations."
+  },
+  {
+    "id": "m30",
+    "question": "In SQL Server, what is a query execution plan?",
+    "options": { "A": "A scheduled maintenance script", "B": "The sequence of steps the query optimizer chooses to execute a query", "C": "A stored procedure call graph", "D": "A trigger activation sequence" },
+    "correct": "B",
+    "hint": "View it with `SET SHOWPLAN_ALL ON` or in SSMS.",
+    "explanation": "An execution plan shows operators (scans, seeks, joins, sorts) and their estimated costs, helping identify performance bottlenecks."
+  },
+  {
+    "id": "m31",
+    "question": "What is the main benefit of the Strategy pattern at runtime?",
+    "options": { "A": "It ensures only one algorithm variant is ever compiled", "B": "It encapsulates all object creation in one place", "C": "It allows the algorithm to be swapped at runtime without changing the client code", "D": "It defines a fixed algorithm structure with locked steps" },
+    "correct": "C",
+    "hint": "Inject the strategy via constructor or property.",
+    "explanation": "The client depends on an interface, so different Strategy implementations can be provided (e.g., different sorting algorithms) without altering client code."
+  },
+  {
+    "id": "m32",
+    "question": "What is eventual consistency in distributed/microservices systems?",
+    "options": { "A": "All nodes always have identical data in real time", "B": "A technique for rolling back distributed transactions atomically", "C": "A pattern requiring all services to share one database", "D": "A model where data updates propagate asynchronously and all replicas converge over time" },
+    "correct": "D",
+    "hint": "Sacrifices immediate consistency for availability and partition tolerance.",
+    "explanation": "In eventually consistent systems, writes are propagated asynchronously. Nodes may temporarily disagree but will converge."
+  },
+  {
+    "id": "m33",
+    "question": "In C#, what is the purpose of the `lock` statement?",
+    "options": { "A": "Ensure only one thread at a time executes the protected block", "B": "Prevent the GC from collecting the locked object", "C": "Immutably freeze an object's state", "D": "Acquire an exclusive database connection" },
+    "correct": "A",
+    "hint": "Uses `Monitor.Enter`/`Monitor.Exit` under the hood.",
+    "explanation": "`lock(obj)` acquires a mutual exclusion lock on the object, preventing other threads from entering the block concurrently."
+  },
+  {
+    "id": "m34",
+    "question": "In ASP.NET Core, what is content negotiation?",
+    "options": { "A": "Selecting the correct middleware based on the request path", "B": "The process where the server selects the response format (e.g., JSON, XML) based on the client's `Accept` header", "C": "Compressing HTTP responses with gzip", "D": "Negotiating TLS certificate parameters" },
+    "correct": "B",
+    "hint": "ASP.NET Core uses output formatters to support this.",
+    "explanation": "When a client sends `Accept: application/xml`, the server picks the matching output formatter to serialize the response."
+  },
+  {
+    "id": "m35",
+    "question": "In EF Core, what is the difference between `Add()` and `Attach()`?",
+    "options": { "A": "`Add()` updates existing rows; `Attach()` inserts new ones", "B": "They are functionally identical", "C": "`Add()` marks the entity as Added (triggers INSERT); `Attach()` marks it as Unchanged (no INSERT)", "D": "`Attach()` only works with legacy EF6 disconnected entities" },
+    "correct": "C",
+    "hint": "Use `Attach()` when the entity already exists in the database.",
+    "explanation": "`Add()` sets the entity state to `Added` so EF inserts it. `Attach()` sets it to `Unchanged`, tracking it without inserting."
+  },
+  {
+    "id": "m36",
+    "question": "What is the main purpose of message queues (e.g., RabbitMQ, Azure Service Bus) in microservices?",
+    "options": { "A": "Store service configuration centrally", "B": "Keep database schemas synchronized across services", "C": "Route synchronous HTTP requests between services", "D": "Enable asynchronous, decoupled communication between services" },
+    "correct": "D",
+    "hint": "Producer publishes; consumer reads at its own pace.",
+    "explanation": "Message queues decouple producers and consumers, allowing services to communicate without being available simultaneously."
+  },
+  {
+    "id": "m37",
+    "question": "In C# generics, what does the constraint `where T : new()` mean?",
+    "options": { "A": "T must have a public parameterless constructor", "B": "T must be a new type not yet instantiated", "C": "T must override the `new` keyword", "D": "T must be a struct" },
+    "correct": "A",
+    "hint": "Allows `new T()` inside the generic method.",
+    "explanation": "`where T : new()` ensures you can call `new T()` inside the generic body."
+  },
+  {
+    "id": "m38",
+    "question": "In SQL Server, what distinguishes a clustered index from a non-clustered index?",
+    "options": { "A": "Clustered indexes are always faster regardless of query type", "B": "A table can have only one clustered index because it defines the physical row storage order; non-clustered indexes are separate structures", "C": "Non-clustered indexes are always faster than clustered indexes", "D": "A clustered index can only be created on the primary key column" },
+    "correct": "B",
+    "hint": "The data pages ARE the clustered index leaf level.",
+    "explanation": "The clustered index determines how table rows are physically stored. Only one is allowed per table; multiple non-clustered indexes can coexist."
+  },
+  {
+    "id": "m39",
+    "question": "In ASP.NET Core DI, what is the difference between `AddScoped`, `AddTransient`, and `AddSingleton`?",
+    "options": { "A": "They control logging verbosity for the service", "B": "They define middleware pipeline order", "C": "They define the service lifetime: per HTTP request, per resolve call, and per application lifetime respectively", "D": "They set the thread priority for the service" },
+    "correct": "C",
+    "hint": "Scoped = one per request; Transient = new every time; Singleton = one ever.",
+    "explanation": "Scoped services live for one HTTP request. Transient services are recreated each resolve. Singletons live for the app lifetime."
+  },
+  {
+    "id": "m40",
+    "question": "This behavioral pattern encapsulates a request as an object, enabling undo/redo, queuing, and logging of operations. What is it?",
+    "options": { "A": "Strategy", "B": "Observer", "C": "Builder", "D": "Command" },
+    "correct": "D",
+    "hint": "Has `Execute()` and optionally `Undo()` methods.",
+    "explanation": "Command turns an action into a first-class object, decoupling the invoker from the object performing the action."
+  },
+  {
+    "id": "m41",
+    "question": "In EF Core, what is the AsSplitQuery() / query-splitting feature?",
+    "options": { "A": "Executing one LINQ query as multiple SQL SELECT statements to avoid cartesian explosion when loading collections", "B": "Splitting a query across database shards", "C": "Paginating a result set automatically", "D": "Parallelizing database queries" },
+    "correct": "A",
+    "hint": "Solves the N×M row multiplication problem with multiple `Include()`s.",
+    "explanation": "`AsSplitQuery()` issues one SQL query per collection navigation, avoiding the massive cross-join that a single query with multiple collection includes would produce."
+  },
+  {
+    "id": "m42",
+    "question": "In microservices, what is service discovery?",
+    "options": { "A": "Finding security vulnerabilities in deployed services", "B": "The mechanism by which services dynamically locate each other's network addresses at runtime", "C": "Automatically generating API documentation from service code", "D": "Monitoring the health of all services" },
+    "correct": "B",
+    "hint": "Client-side (Ribbon) or server-side (AWS ALB, Consul) discovery.",
+    "explanation": "Service discovery allows services to find each other without hardcoded IPs, typically via a registry (Consul, Eureka, Kubernetes DNS)."
+  },
+  {
+    "id": "m43",
+    "question": "What does `ValueTask<T>` offer over `Task<T>` in C#?",
+    "options": { "A": "Better support for cancellation tokens", "B": "Higher thread scheduling priority", "C": "Reduced heap allocation when the result is often available synchronously", "D": "Built-in parallel execution of multiple tasks" },
+    "correct": "C",
+    "hint": "Used in hot paths like cache lookups that rarely hit the actual async path.",
+    "explanation": "`ValueTask<T>` avoids allocating a `Task` object when the result is already available, reducing GC pressure in high-throughput scenarios."
+  },
+  {
+    "id": "m44",
+    "question": "In SQL Server, what is a view?",
+    "options": { "A": "A cached query result persisted to disk", "B": "A stored procedure that returns rows", "C": "A materialized copy of a table refreshed on schedule", "D": "A named virtual table defined by a saved SELECT query" },
+    "correct": "D",
+    "hint": "No data is stored; it executes the SELECT on access.",
+    "explanation": "A view is a stored SELECT query presented as a virtual table. It doesn't store data unless it's an indexed (materialized) view."
+  },
+  {
+    "id": "m45",
+    "question": "In ASP.NET Core, what does implementing `IMiddleware` provide over convention-based middleware?",
+    "options": { "A": "Define middleware with factory-based activation so it can receive scoped DI services per request", "B": "Create HTTP authentication filters", "C": "Define background services integrated with the host", "D": "Register route handlers for specific paths" },
+    "correct": "A",
+    "hint": "Registered with `UseMiddleware<T>()` and resolved from DI per request.",
+    "explanation": "`IMiddleware` allows middleware to be activated through the DI container per request, enabling scoped dependencies — unlike convention-based middleware which is a singleton."
+  },
+  {
+    "id": "m46",
+    "question": "What is the Mediator pattern used for?",
+    "options": { "A": "Translating between two incompatible interfaces", "B": "Reducing direct dependencies between objects by routing all communication through a central mediator object", "C": "Providing a simplified facade for a subsystem", "D": "Caching object states for rollback" },
+    "correct": "B",
+    "hint": "MediatR library is a popular .NET implementation.",
+    "explanation": "Mediator promotes loose coupling by preventing objects from referring to each other directly — they communicate via a mediator."
+  },
+  {
+    "id": "m47",
+    "question": "In EF Core, what does `.AsNoTracking()` do?",
+    "options": { "A": "Prevent EF from logging SQL queries", "B": "Disable lazy loading for the query", "C": "Return entities without change tracking for improved read-only query performance", "D": "Skip database constraints during the query" },
+    "correct": "C",
+    "hint": "Ideal for read-only scenarios like API GET endpoints.",
+    "explanation": "`AsNoTracking()` tells EF Core not to track returned entities, reducing memory overhead and improving read performance."
+  },
+  {
+    "id": "m48",
+    "question": "What is the key difference between `IEnumerable<T>` and `IQueryable<T>` in EF Core?",
+    "options": { "A": "`IQueryable<T>` only works with in-memory collections", "B": "`IEnumerable<T>` supports deferred execution; `IQueryable<T>` does not", "C": "They are identical in behavior", "D": "`IQueryable<T>` translates LINQ expressions to SQL and executes server-side; `IEnumerable<T>` evaluates in memory" },
+    "correct": "D",
+    "hint": "Calling `ToList()` materializes either; the difference is where filtering happens.",
+    "explanation": "An `IQueryable<T>` query builds an expression tree translated to SQL; switching to `IEnumerable<T>` fetches all rows first, then filters in memory."
+  },
+  {
+    "id": "m49",
+    "question": "In microservices, what is the Saga pattern?",
+    "options": { "A": "A way to manage distributed transactions across services using a sequence of local transactions with compensating actions on failure", "B": "A pattern for versioning service APIs", "C": "A monitoring and alerting strategy for microservices", "D": "An API composition pattern for aggregating reads" },
+    "correct": "A",
+    "hint": "Two variants: Choreography (events) and Orchestration (central coordinator).",
+    "explanation": "Saga replaces distributed ACID transactions with a sequence of local transactions; failures trigger compensating transactions to undo previous steps."
+  },
+  {
+    "id": "m50",
+    "question": "In SQL Server, what does `WITH (NOLOCK)` do?",
+    "options": { "A": "Prevents other transactions from reading the table", "B": "Allows reading uncommitted data without acquiring shared locks (READ UNCOMMITTED)", "C": "Disables query plan caching", "D": "Forces a clustered index scan" },
+    "correct": "B",
+    "hint": "Can cause dirty reads — use cautiously.",
+    "explanation": "`NOLOCK` is equivalent to READ UNCOMMITTED: it skips lock acquisition for reads, improving concurrency at the cost of potentially reading uncommitted data."
+  },
+  {
+    "id": "m51",
+    "question": "In ASP.NET Core MVC, what is model binding?",
+    "options": { "A": "Linking entity classes to database table definitions", "B": "Attaching event handlers to model change notifications", "C": "Automatically mapping HTTP request data (route, query string, body) to action method parameters", "D": "Validating model properties against business domain rules" },
+    "correct": "C",
+    "hint": "Supports `[FromRoute]`, `[FromQuery]`, `[FromBody]`, etc.",
+    "explanation": "Model binding reads data from the HTTP request and populates action parameters and model properties automatically."
+  },
+  {
+    "id": "m52",
+    "question": "What is the primary difference between the Factory Method and Abstract Factory design patterns?",
+    "options": { "A": "Factory Method is creational; Abstract Factory is structural", "B": "Abstract Factory uses inheritance; Factory Method uses composition exclusively", "C": "They are the same pattern with different names", "D": "Factory Method creates one product type; Abstract Factory creates families of related products" },
+    "correct": "D",
+    "hint": "Abstract Factory groups related factories under one interface.",
+    "explanation": "Factory Method has one creator producing one product type. Abstract Factory provides an interface for creating families of related objects."
+  },
+  {
+    "id": "m53",
+    "question": "In C# `async/await`, what happens if you call an async method without `await`?",
+    "options": { "A": "The returned Task is ignored; any exceptions become unobserved and the operation runs fire-and-forget", "B": "The method runs synchronously on the calling thread", "C": "A compile-time error is thrown by the compiler", "D": "The async method is cancelled immediately" },
+    "correct": "A",
+    "hint": "You'll get a compiler warning CS4014.",
+    "explanation": "Without `await`, you get a fire-and-forget Task. Exceptions won't be observed and execution order becomes unpredictable."
+  },
+  {
+    "id": "m54",
+    "question": "In SQL Server, what is a covering index?",
+    "options": { "A": "An index spanning every column in a table", "B": "An index that includes all columns needed by a query, eliminating the need for a key lookup (table lookup)", "C": "An index used to enforce foreign key constraints", "D": "A filtered index covering a specific subset of rows" },
+    "correct": "B",
+    "hint": "Use `INCLUDE(col1, col2)` in the CREATE INDEX statement.",
+    "explanation": "A covering index satisfies a query entirely from the index without touching the base table, dramatically improving performance."
+  },
+  {
+    "id": "m55",
+    "question": "In EF Core, what is a shadow property?",
+    "options": { "A": "A navigation property hidden from API consumers", "B": "A computed property generated by a SQL expression", "C": "A property that exists in the database schema and is tracked by EF Core but is not defined on the C# entity class", "D": "A property used only during migration generation" },
+    "correct": "C",
+    "hint": "Accessed via `entry.Property(\"PropertyName\")`.",
+    "explanation": "Shadow properties allow EF Core to track columns (e.g., `CreatedAt`, `TenantId`) without polluting the entity class."
+  },
+  {
+    "id": "m56",
+    "question": "In microservices, what does the Strangler Fig pattern describe?",
+    "options": { "A": "Removing legacy services by abruptly shutting them down", "B": "A security pattern for throttling API access", "C": "Monitoring legacy service degradation over time", "D": "Incrementally replacing a legacy monolith by routing traffic to new microservices piece by piece until the old system is retired" },
+    "correct": "D",
+    "hint": "Named after the strangler fig plant that grows around an existing tree.",
+    "explanation": "Strangler Fig enables gradual migration: new services intercept specific features while the monolith handles the rest, eventually being phased out entirely."
+  },
+  {
+    "id": "m57",
+    "question": "In the .NET TPL, what does `Task.WhenAll()` return?",
+    "options": { "A": "A task that completes when ALL of the provided tasks have completed", "B": "A task that completes when any one task completes", "C": "A task that cancels all others if one fails", "D": "The result of the first completed task" },
+    "correct": "A",
+    "hint": "Useful for firing multiple async calls in parallel and waiting for them all.",
+    "explanation": "`Task.WhenAll(t1, t2, t3)` creates a task that completes only after all input tasks finish (or any faults)."
+  },
+  {
+    "id": "m58",
+    "question": "In SQL Server, which tool/statement lets you view the estimated execution plan without actually running the query?",
+    "options": { "A": "EXPLAIN QUERY PLAN (not SQL Server syntax)", "B": "SET SHOWPLAN_ALL ON (or SET SHOWPLAN_TEXT ON)", "C": "DISPLAY PLAN", "D": "SHOW EXECUTION PLAN" },
+    "correct": "B",
+    "hint": "Or use the 'Display Estimated Execution Plan' button in SSMS.",
+    "explanation": "`SET SHOWPLAN_ALL ON` causes SQL Server to return the plan without executing the query. `STATISTICS IO` and `STATISTICS TIME` are for actual execution."
+  },
+  {
+    "id": "m59",
+    "question": "In ASP.NET Core, what does the `[ApiController]` attribute enable?",
+    "options": { "A": "Marks the controller as requiring authentication", "B": "Enables CORS for all actions in the controller", "C": "Enables automatic model validation error responses and binding-source inference without explicit attributes", "D": "Registers the controller with the DI container automatically" },
+    "correct": "C",
+    "hint": "Returns 400 Bad Request automatically when `ModelState.IsValid` is false.",
+    "explanation": "`[ApiController]` enables automatic 400 responses for invalid models, infers `[FromBody]` on complex parameters, and more."
+  },
+  {
+    "id": "m60",
+    "question": "How does the Decorator pattern differ from inheritance for extending behavior?",
+    "options": { "A": "Decorator is less flexible because it requires subclassing for each behavior", "B": "They offer identical flexibility at runtime", "C": "Inheritance allows runtime behavior changes; Decorator requires compile-time wiring", "D": "Decorator adds behavior at runtime by wrapping objects, while inheritance is a static compile-time relationship" },
+    "correct": "D",
+    "hint": "Prefer composition over inheritance for combinatorial flexibility.",
+    "explanation": "Inheritance locks behavior at compile time. Decorators can be combined and swapped at runtime, avoiding class explosion."
+  }
 ]
