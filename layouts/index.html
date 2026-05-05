@@ -9,12 +9,12 @@
 </head>
 <body>
 
-  <!-- Data injected by Hugo — type="application/json" is skipped by minifiers -->
-  <script type="application/json" id="q-easy">{{ .Site.Data.easy | jsonify }}</script>
-  <script type="application/json" id="q-medium">{{ .Site.Data.medium | jsonify }}</script>
-  <script type="application/json" id="q-hard">{{ .Site.Data.hard | jsonify }}</script>
-
   <script>
+    /* Question banks — injected at build time by Hugo.
+       safeJS prevents html/template from JS-escaping the JSON output. */
+    const EASY_QUESTIONS   = {{ .Site.Data.easy   | jsonify | safeJS }};
+    const MEDIUM_QUESTIONS = {{ .Site.Data.medium | jsonify | safeJS }};
+    const HARD_QUESTIONS   = {{ .Site.Data.hard   | jsonify | safeJS }};
     const PRIZES = [
       "₹1,000","₹2,000","₹3,000","₹5,000","₹10,000",
       "₹20,000","₹40,000","₹80,000","₹1,60,000","₹3,20,000",

@@ -7,11 +7,8 @@
    ─────────────────────────────────────────────────────────────────────────── */
 
 const STORAGE_KEY = 'kbc_net_v2';
-
-// Read question banks from the JSON script tags Hugo injected
-const EASY_QUESTIONS   = JSON.parse(document.getElementById('q-easy').textContent);
-const MEDIUM_QUESTIONS = JSON.parse(document.getElementById('q-medium').textContent);
-const HARD_QUESTIONS   = JSON.parse(document.getElementById('q-hard').textContent);
+// EASY_QUESTIONS, MEDIUM_QUESTIONS, HARD_QUESTIONS, PRIZES, SAFE_LEVELS
+// are injected as globals by the inline <script> block in index.html
 
 // ─── State ────────────────────────────────────────────────────────────────────
 let state = {

@@ -2,3 +2,6 @@ baseURL = "/"
 title = "KBC .NET Edition"
 languageCode = "en-in"
 disableKinds = ["taxonomy", "term", "RSS"]
+
+[minify]
+  disableJS = true   # prevents the JS minifier from mangling inline data blocks
